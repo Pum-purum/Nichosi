@@ -5,7 +5,6 @@ bin/
 *.log
 .env
 .env.*
-!.env.example
 connections.json
 .DS_Store
 backend/internal/web/dist/

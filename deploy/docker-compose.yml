@@ -13,27 +13,4 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - ../connections.json:/config/connections.json:ro
-    depends_on:
-      mysql:
-        condition: service_healthy
     restart: unless-stopped
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
-      MYSQL_USER: ${MYSQL_USER:-nichosi}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
-      MYSQL_DATABASE: bitrix_test
-    ports:
-      - "127.0.0.1:3307:3306"
-    volumes:
-      - ./seed:/docker-entrypoint-initdb.d:ro
-      - mysql-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-volumes:
-  mysql-data:

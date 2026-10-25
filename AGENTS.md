@@ -14,7 +14,7 @@
 - `api/openapi.yaml` — ЕДИНЫЙ контракт между backend и frontend, единственный источник истины.
 - `backend/` — Go; следуйте правилам из `backend/AGENTS.md`.
 - `frontend/` — Svelte + TypeScript + Vite; следуйте правилам из `frontend/AGENTS.md`.
-- `deploy/` — Dockerfile и docker-compose с тестовой MySQL и схемой, похожей на Bitrix, без внешних ключей.
+- `deploy/` — Dockerfile и docker-compose для веб-приложения Nichosi.
 - `docs/architecture.md` — архитектура и интерфейс Driver. `docs/design/` — изображения-образцы интерфейса.
 - `docs/decisions/` — короткие ADR, по одному файлу на решение, с нумерацией.
 
@@ -42,7 +42,7 @@
 4. Если агенту требуется изменить контракт, он должен внести минимальные изменения в `api/openapi.yaml` и явно сообщить об этом. Главная сессия решает, нужно ли адаптировать другую часть приложения.
 
 ## Команды
-Список команд приведён в Makefile: `make db-up`, `make be-run`, `make be-test`, `make fe-dev`, `make gen-types`, `make mock`, `make docker-build`.
+Список команд приведён в Makefile: `make app-up`, `make app-down`, `make be-run`, `make be-test`, `make fe-dev`, `make gen-types`, `make mock`, `make docker-build`.
 
 ## Git
 - Делайте небольшие коммиты с повелительным сообщением на английском языке, например `Add keyset pagination for MySQL driver`.

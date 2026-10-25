@@ -1,15 +1,15 @@
 .RECIPEPREFIX = >
-.PHONY: help db-up db-down be-run be-test be-vet fe-install fe-dev gen-types gen-go-types mock docker-build
+.PHONY: help app-up app-down be-run be-test be-vet fe-install fe-dev gen-types gen-go-types mock docker-build
 
 help:
 > @grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*##/ -/'
 
-db-up: ## build and start Nichosi and test MySQL on loopback ports
+app-up: ## build and start Nichosi in Docker
 > test -f connections.json || cp connections.example.json connections.json
-> docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
+> docker compose -f deploy/docker-compose.yml up -d --build
 
-db-down: ## stop Nichosi and test MySQL, preserving database data
-> docker compose --env-file .env -f deploy/docker-compose.yml down
+app-down: ## stop the Nichosi container
+> docker compose -f deploy/docker-compose.yml down
 
 be-run: ## run backend on 127.0.0.1:8080
 > cd backend && go run ./cmd/nichosi

@@ -1,12 +1,12 @@
 {
   "connections": [
     {
-      "name": "Local test database",
+      "name": "My database",
       "driver": "mysql",
-      "host": "mysql",
+      "host": "host.docker.internal",
       "port": 3306,
-      "user": "nichosi",
-      "database": "bitrix_test",
+      "user": "database_user",
+      "database": "database_name",
       "environment": "dev",
       "password": ""
     }
