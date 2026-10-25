@@ -23,7 +23,9 @@ import (
 
 type profile struct {
 	Connection
-	pool *sql.DB
+	mu    sync.RWMutex
+	pool  *sql.DB
+	input ConnectionInput
 }
 
 type connectionsConfig struct {
@@ -70,6 +72,8 @@ func main() {
 	})
 	mux.Handle("GET /api/connections", application.authorize(http.HandlerFunc(application.listConnections)))
 	mux.Handle("POST /api/connections", application.authorize(http.HandlerFunc(application.createConnection)))
+	mux.Handle("POST /api/connections/{connId}/connect", application.authorize(http.HandlerFunc(application.connectConnection)))
+	mux.Handle("POST /api/connections/{connId}/disconnect", application.authorize(http.HandlerFunc(application.disconnectConnection)))
 	mux.Handle("GET /api/connections/{connId}/schema", application.authorize(http.HandlerFunc(application.getSchema)))
 	mux.Handle("POST /api/connections/{connId}/tables/{table}/rows", application.authorize(http.HandlerFunc(application.queryRows)))
 	mux.Handle("/", application.static)
@@ -100,7 +104,9 @@ func (a *app) listConnections(w http.ResponseWriter, _ *http.Request) {
 	defer a.mu.RUnlock()
 	result := make([]Connection, 0, len(a.connections))
 	for _, item := range a.connections {
+		item.mu.RLock()
 		result = append(result, item.Connection)
+		item.mu.RUnlock()
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -140,10 +146,59 @@ func (a *app) connection(id string) *profile {
 	return nil
 }
 
+func (a *app) connectConnection(w http.ResponseWriter, r *http.Request) {
+	item := a.connection(r.PathValue("connId"))
+	if item == nil {
+		writeError(w, http.StatusNotFound, "not_found", "Connection not found")
+		return
+	}
+	item.mu.Lock()
+	defer item.mu.Unlock()
+	if item.pool == nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+		defer cancel()
+		opened, err := a.openMySQLConnection(ctx, item.input)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "connection_failed", "Could not reconnect to the database. Check that it is available.")
+			return
+		}
+		item.pool = opened.pool
+		item.DatabaseSizeBytes = opened.DatabaseSizeBytes
+		item.LastConnectedAt = opened.LastConnectedAt
+	}
+	item.Connected = true
+	writeJSON(w, http.StatusOK, item.Connection)
+}
+
+func (a *app) disconnectConnection(w http.ResponseWriter, r *http.Request) {
+	item := a.connection(r.PathValue("connId"))
+	if item == nil {
+		writeError(w, http.StatusNotFound, "not_found", "Connection not found")
+		return
+	}
+	item.mu.Lock()
+	defer item.mu.Unlock()
+	if item.pool != nil {
+		if err := item.pool.Close(); err != nil {
+			writeError(w, http.StatusBadGateway, "disconnect_failed", "Could not close the database connection")
+			return
+		}
+		item.pool = nil
+	}
+	item.Connected = false
+	writeJSON(w, http.StatusOK, item.Connection)
+}
+
 func (a *app) getSchema(w http.ResponseWriter, r *http.Request) {
 	item := a.connection(r.PathValue("connId"))
 	if item == nil {
 		writeError(w, 404, "not_found", "Connection not found")
+		return
+	}
+	item.mu.RLock()
+	defer item.mu.RUnlock()
+	if item.pool == nil {
+		writeError(w, http.StatusConflict, "disconnected", "Connection is closed")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -214,6 +269,12 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	item := a.connection(r.PathValue("connId"))
 	if item == nil {
 		writeError(w, 404, "not_found", "Connection not found")
+		return
+	}
+	item.mu.RLock()
+	defer item.mu.RUnlock()
+	if item.pool == nil {
+		writeError(w, http.StatusConflict, "disconnected", "Connection is closed")
 		return
 	}
 	table := r.PathValue("table")
@@ -331,14 +392,25 @@ func (a *app) loadConfiguredConnections() {
 			Port: saved.Port, User: saved.User, Password: &saved.Password,
 			Database: saved.Database, Environment: environment,
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-		item, err := a.openMySQLConnection(ctx, input)
-		cancel()
-		if err != nil {
-			slog.Warn("configured database connection is unavailable", "name", saved.Name)
-			continue
+		name := strings.TrimSpace(saved.Name)
+		if name == "" {
+			name = saved.Database
 		}
-		a.connections = append(a.connections, item)
+		a.connections = append(a.connections, &profile{
+			Connection: Connection{
+				Id:          fmt.Sprintf("conn-%d", time.Now().UTC().UnixNano()),
+				Name:        name,
+				Driver:      ConnectionDriver("mysql"),
+				Host:        saved.Host,
+				Port:        saved.Port,
+				User:        saved.User,
+				Database:    saved.Database,
+				Environment: environment,
+				ReadOnly:    environment == Environment("prod"),
+				Connected:   false,
+			},
+			input: input,
+		})
 	}
 }
 
@@ -372,7 +444,7 @@ func (a *app) openMySQLConnection(ctx context.Context, input ConnectionInput) (*
 	if environment != Environment("stage") && environment != Environment("prod") {
 		environment = Environment("dev")
 	}
-	return &profile{Connection: Connection{Id: fmt.Sprintf("conn-%d", now.UnixNano()), Name: name, Driver: ConnectionDriver("mysql"), Host: input.Host, Port: input.Port, User: input.User, Database: input.Database, Environment: environment, ReadOnly: environment == Environment("prod"), DatabaseSizeBytes: &size, LastConnectedAt: &now}, pool: pool}, nil
+	return &profile{Connection: Connection{Id: fmt.Sprintf("conn-%d", now.UnixNano()), Name: name, Driver: ConnectionDriver("mysql"), Host: input.Host, Port: input.Port, User: input.User, Database: input.Database, Environment: environment, ReadOnly: environment == Environment("prod"), Connected: true, DatabaseSizeBytes: &size, LastConnectedAt: &now}, pool: pool, input: input}, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

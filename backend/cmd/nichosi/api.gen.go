@@ -135,6 +135,7 @@ type Connection struct {
 	Name              string           `json:"name"`
 	Port              int              `json:"port"`
 	ReadOnly          bool             `json:"readOnly"`
+	Connected         bool             `json:"connected"`
 	User              string           `json:"user"`
 }
 

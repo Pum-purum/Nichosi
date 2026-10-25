@@ -58,6 +58,9 @@
   async function openDatabase(connection: Connection) {
     selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; rowsPage = null; tables = []; objects = []; error = ''; databaseLoading = true;
     try {
+      const connected = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/connect`, { method: 'POST' });
+      selectedConnection = connected;
+      connections = connections.map((item) => item.id === connected.id ? connected : item);
       const schema = await request<components['schemas']['Schema']>(`/api/connections/${encodeURIComponent(connection.id)}/schema`);
       tables = schema.tables; objects = schema.objects;
       if (tables.length) await selectTable(tables[0].name);
@@ -83,12 +86,19 @@
     return type === 'table' ? tables.length : objects.filter((object) => object.type === type).length;
   }
 
-  function disconnect() {
-    selectedConnection = null;
-    selectedTable = '';
-    selectedObject = null;
-    rowsPage = null;
-    error = '';
+  async function disconnect() {
+    if (!selectedConnection) return;
+    try {
+      const closed = await request<Connection>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/disconnect`, { method: 'POST' });
+      connections = connections.map((item) => item.id === closed.id ? closed : item);
+      selectedConnection = null;
+      selectedTable = '';
+      selectedObject = null;
+      rowsPage = null;
+      error = '';
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Could not disconnect from the database';
+    }
   }
 
   onMount(() => { void loadConnections(); });
@@ -166,7 +176,7 @@
             </nav>
           </div>
           <div class="sidebar-footer">
-            <button class="connection-status" onclick={disconnect} aria-label={`Disconnect from ${selectedConnection.name}`} title="Disconnect">
+            <button class="connection-status" onclick={() => void disconnect()} aria-label={`Disconnect from ${selectedConnection.name}`} title="Disconnect">
               <span class="connection-dot"></span><span>Connected</span><span class="sidebar-footer-host">{selectedConnection.host}:{selectedConnection.port}</span><Unplug size={15} />
             </button>
           </div>
@@ -222,7 +232,7 @@
                 <span class="connection-meta" title="Database size"><HardDrive size={14} /><span>{formatBytes(connection.databaseSizeBytes)}</span></span>
                 <span class="connection-meta connection-time" title="Last connection"><Clock size={14} /><span>{formatDate(connection.lastConnectedAt)}</span></span>
                 {#if connection.readOnly}<span class="connection-readonly" title="Production · read-only"><ShieldCheck size={14} /> Prod</span>{/if}
-                <span class="preview-badge connected"><span></span> Connected</span>
+                <span class:connected={connection.connected} class="preview-badge"><span></span>{connection.connected ? 'Connected' : 'Disconnected'}</span>
               </div>
             </button>
           {/each}

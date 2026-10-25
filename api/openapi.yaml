@@ -59,6 +59,28 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Schema" }
         default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/connect:
+    post:
+      operationId: connectConnection
+      parameters: [ { $ref: "#/components/parameters/ConnId" } ]
+      responses:
+        "200":
+          description: Connection is open
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connection" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/disconnect:
+    post:
+      operationId: disconnectConnection
+      parameters: [ { $ref: "#/components/parameters/ConnId" } ]
+      responses:
+        "200":
+          description: Connection is closed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connection" }
+        default: { $ref: "#/components/responses/Error" }
   /api/connections/{connId}/tables/{table}/rows:
     post:
       operationId: queryRows
@@ -180,7 +202,7 @@ components:
       enum: [dev, stage, prod]
     Connection:
       type: object
-      required: [id, name, driver, host, port, user, database, environment, readOnly, databaseSizeBytes, lastConnectedAt]
+      required: [id, name, driver, host, port, user, database, environment, readOnly, connected, databaseSizeBytes, lastConnectedAt]
       properties:
         id: { type: string }
         name: { type: string }
@@ -191,6 +213,7 @@ components:
         database: { type: string }
         environment: { $ref: "#/components/schemas/Environment" }
         readOnly: { type: boolean }
+        connected: { type: boolean, description: "Whether the application currently holds an open database connection" }
         databaseSizeBytes: { type: integer, format: int64, nullable: true, description: "Database size in bytes; null when unavailable" }
         lastConnectedAt: { type: string, format: date-time, nullable: true }
     ConnectionInput:

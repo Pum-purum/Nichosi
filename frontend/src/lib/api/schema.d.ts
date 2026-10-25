@@ -52,6 +52,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/{connId}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["connectConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{connId}/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disconnectConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections/{connId}/tables/{table}/rows": {
         parameters: {
             query?: never;
@@ -174,6 +206,8 @@ export interface components {
             database: string;
             environment: components["schemas"]["Environment"];
             readOnly: boolean;
+            /** @description Whether the application currently holds an open database connection */
+            connected: boolean;
             /**
              * Format: int64
              * @description Database size in bytes; null when unavailable
@@ -208,9 +242,15 @@ export interface components {
             name: string;
             /** Format: int64 */
             rowsEstimate: number;
-            /** Estimated table data size in bytes */
+            /**
+             * Format: int64
+             * @description Estimated table data size in bytes
+             */
             dataBytes: number;
-            /** Estimated table index size in bytes */
+            /**
+             * Format: int64
+             * @description Estimated table index size in bytes
+             */
             indexBytes: number;
             columns: components["schemas"]["Column"][];
         };
@@ -220,6 +260,7 @@ export interface components {
         };
         DatabaseObject: {
             name: string;
+            /** @enum {string} */
             type: "view" | "trigger" | "procedure" | "function" | "event" | "role";
         };
         Filter: {
@@ -427,6 +468,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Schema"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    connectConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connId: components["parameters"]["ConnId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection is open */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    disconnectConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connId: components["parameters"]["ConnId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection is closed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
                 };
             };
             default: components["responses"]["Error"];
