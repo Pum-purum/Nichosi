@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Braces, Clock, Code2, Columns3, Database, Eye, Filter, HardDrive, KeyRound, Pencil, Search, Server, ShieldCheck, SlidersHorizontal, TableProperties, Trash2, Unplug, UserRound, Zap } from '@lucide/svelte';
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import type { components } from './lib/api/schema';
 
   type Connection = components['schemas']['Connection'];
@@ -31,6 +32,8 @@
   let objects = $state<components['schemas']['DatabaseObject'][]>([]);
   let rowsPage = $state<RowsPage | null>(null);
   let databaseLoading = $state(false);
+  let rowsLoading = $state(false);
+  let rowsRequestId = 0;
 
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -56,6 +59,8 @@
   }
 
   async function openDatabase(connection: Connection) {
+    rowsRequestId += 1;
+    rowsLoading = false;
     selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; rowsPage = null; tables = []; objects = []; error = ''; databaseLoading = true;
     try {
       const connected = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/connect`, { method: 'POST' });
@@ -70,9 +75,16 @@
 
   async function selectTable(name: string) {
     if (!selectedConnection) return;
-    activeObjectType = 'table'; selectedObject = null; selectedTable = name; error = ''; rowsPage = null;
-    try { rowsPage = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/tables/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: 200 }) }); }
-    catch (cause) { error = cause instanceof Error ? cause.message : 'Could not read table rows'; rowsPage = null; }
+    const requestId = ++rowsRequestId;
+    activeObjectType = 'table'; selectedObject = null; selectedTable = name; error = ''; rowsLoading = true;
+    try {
+      const page = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/tables/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: 200 }) });
+      if (requestId === rowsRequestId) rowsPage = page;
+    } catch (cause) {
+      if (requestId === rowsRequestId) { error = cause instanceof Error ? cause.message : 'Could not read table rows'; rowsPage = null; }
+    } finally {
+      if (requestId === rowsRequestId) rowsLoading = false;
+    }
   }
 
   function selectSection(type: ObjectType) {
@@ -88,6 +100,8 @@
 
   async function disconnect() {
     if (!selectedConnection) return;
+    rowsRequestId += 1;
+    rowsLoading = false;
     try {
       const closed = await request<Connection>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/disconnect`, { method: 'POST' });
       connections = connections.map((item) => item.id === closed.id ? closed : item);
@@ -182,10 +196,11 @@
           </div>
         </aside>
 
+        <div class="workspace-main">
         {#if activeObjectType === 'table'}
           <div class="table-main">
             <div class="table-toolbar"><span class="read-only-note"><ShieldCheck size={14} /> {selectedConnection.readOnly ? 'Read only · Production' : 'Read only preview'}</span><span class="toolbar-spacer"></span><label class="data-filter"><Search size={16} /><input placeholder="Filter rows…" aria-label="Filter rows" /></label><button class="toolbar-control"><SlidersHorizontal size={16} /> Filter</button><button class="icon-button" aria-label="Column visibility"><Columns3 size={18} /></button></div>
-            <div class="data-grid-wrap">{#if databaseLoading}<p>Loading database…</p>{:else if error}<p>{error}</p>{:else if rowsPage}<table class="data-grid"><thead><tr><th class="actions-head">Actions</th><th class="row-index-head">#</th>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}</tr></thead><tbody>{#each rowsPage.rows as row, rowIndex}<tr><td class="row-actions"><button aria-label="Edit row"><Pencil size={16} /></button><button aria-label="Delete row"><Trash2 size={16} /></button></td><td class="row-index">{rowIndex + 1}</td>{#each row as value, columnIndex}<td>{#if columnIndex === 4}<span class:status-active={value === 'active'} class:status-pending={value === 'pending'} class:status-inactive={value === 'inactive'} class="status-pill"><span></span>{value}</span>{:else}<span class:muted-value={value === '—'}>{value ?? 'NULL'}</span>{/if}</td>{/each}</tr>{/each}</tbody></table>{:else if !databaseLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}</div>
+            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<p>{error}</p>{:else if rowsPage}<table class="data-grid"><thead><tr><th class="actions-head">Actions</th><th class="row-index-head">#</th>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}</tr></thead><tbody>{#each rowsPage.rows as row, rowIndex}<tr><td class="row-actions"><button aria-label="Edit row"><Pencil size={16} /></button><button aria-label="Delete row"><Trash2 size={16} /></button></td><td class="row-index">{rowIndex + 1}</td>{#each row as value, columnIndex}<td>{#if columnIndex === 4}<span class:status-active={value === 'active'} class:status-pending={value === 'pending'} class:status-inactive={value === 'inactive'} class="status-pill"><span></span>{value}</span>{:else}<span class:muted-value={value === '—'}>{value ?? 'NULL'}</span>{/if}</td>{/each}</tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || rowsLoading}<div class="grid-loading" role="status" transition:fade={{ duration: 140 }}><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
             <footer class="grid-footer"><span>Showing <strong>{rowsPage?.rows.length ?? 0} of {tables.find((table) => table.name === selectedTable)?.rowsEstimate ?? 0} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page"><option>50</option><option>100</option><option>200</option></select></label><span class="grid-summary">Rows: <strong>{rowsPage?.rows.length ?? 0}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination"><button disabled aria-label="First page">«</button><button disabled aria-label="Previous page">‹</button><span>Page 1 of 1</span><button disabled aria-label="Next page">›</button><button disabled aria-label="Last page">»</button></span></footer>
           </div>
         {:else}
@@ -197,6 +212,7 @@
             {/if}
           </section>
         {/if}
+        </div>
       </section>
     {:else if loading}
       <section class="empty-state" aria-labelledby="empty-title">
