@@ -5,6 +5,7 @@ bin/
 *.log
 .env
 .env.*
+!.env.example
 .DS_Store
 .claude/settings.local.json
 backend/internal/web/dist/

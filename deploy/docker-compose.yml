@@ -1,15 +1,36 @@
+name: nichosi
+
 services:
+  nichosi:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      NICHOSI_ADDR: 0.0.0.0:8080
+      NICHOSI_ADMIN_TOKEN: ${NICHOSI_ADMIN_TOKEN:?Set NICHOSI_ADMIN_TOKEN in .env}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
   mysql:
     image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: devpassword   # development only
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_USER: ${MYSQL_USER:-nichosi}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
       MYSQL_DATABASE: bitrix_test
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     volumes:
       - ./seed:/docker-entrypoint-initdb.d:ro
+      - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pdevpassword"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
       interval: 5s
       timeout: 3s
       retries: 20
+
+volumes:
+  mysql-data:

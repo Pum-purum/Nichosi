@@ -13,7 +13,7 @@ WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum* ./
 RUN go mod download
 COPY backend/ ./
-COPY --from=web /src/frontend/dist ./internal/web/dist
+COPY --from=web /src/frontend/dist ./cmd/nichosi/static
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/nichosi ./cmd/nichosi \
  && mkdir -p /out/data
 
