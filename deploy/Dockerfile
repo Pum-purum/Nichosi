@@ -1,11 +1,12 @@
 # Skeleton: finalize after the frontend exists and the backend embeds frontend/dist.
 FROM node:22-alpine AS web
 WORKDIR /src/frontend
-COPY frontend/package*.json ./
-RUN npm ci
+RUN corepack enable
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 COPY api/ /src/api/
-RUN npm run build
+RUN pnpm build
 
 FROM golang:1.25-alpine AS build
 WORKDIR /src/backend

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nichosi project scaffold for Claude Code (backend-go + frontend-svelte agents).
+# Nichosi project scaffold for the Go backend and Svelte frontend.
 # Usage: bash bootstrap-nichosi.sh [path-to-Nichosi-folder] [github-user]
 # Safe to re-run: existing files are never overwritten.
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
@@ -43,65 +43,63 @@ with a reviewable ChangeSet, relations graph (real and inferred links), statisti
 
 Status: early development.
 
-See `CLAUDE.md` for contributor/agent rules and `docs/architecture.md` for design.
+See `AGENTS.md` for contributor rules and `docs/architecture.md` for design.
 EOF
 
-write CLAUDE.md <<'EOF'
+write AGENTS.md <<'EOF'
 # Nichosi
 
-Open-source database client. MySQL/MariaDB first, then PostgreSQL and SQLite.
-Dark IDE-style UI. Four features: connections, table editing, relations view, statistics.
-Primary delivery: a web app in a Docker image. Later: a desktop binary for Ubuntu (Wails),
-reusing the same core and frontend.
+Открытый клиент для работы с базами данных. В первую очередь MySQL/MariaDB, затем PostgreSQL и SQLite.
+Основные функции: подключения, редактирование таблиц, просмотр связей и статистика.
+Основной формат поставки — веб-приложение в Docker-образе. Позже планируется настольная версия для Ubuntu на Wails,
+использующая то же ядро и фронтенд.
 
-## Language
-- Talk to the maintainer in Russian.
-- Code, comments, identifiers, commit messages, docs: English.
+## Язык
+- Общайтесь с сопровождающим проекта на русском языке.
+- Код, комментарии, идентификаторы, сообщения коммитов и документация должны быть на английском языке.
 
-## Repo map
-- `api/openapi.yaml` - THE contract between backend and frontend. Single source of truth.
-- `backend/`  - Go. See `backend/CLAUDE.md`.
-- `frontend/` - Svelte + TypeScript + Vite. See `frontend/CLAUDE.md`.
-- `deploy/`   - Dockerfile, docker-compose (test MySQL with a Bitrix-like schema, no FKs).
-- `docs/architecture.md` - design and Driver interface. `docs/design/` - UI reference images.
-- `docs/decisions/` - short ADRs (one file per decision, numbered).
+## Структура репозитория
+- `api/openapi.yaml` — единый контракт между backend и frontend, единственный источник истины.
+- `backend/` — Go; правила находятся в `backend/AGENTS.md`.
+- `frontend/` — Svelte + TypeScript + Vite; правила находятся в `frontend/AGENTS.md`.
+- `deploy/` — Dockerfile и docker-compose с тестовой MySQL и схемой без внешних ключей.
+- `docs/architecture.md` — архитектура и интерфейс Driver. `docs/design/` — оригинальное направление дизайна.
+- `docs/decisions/` — короткие пронумерованные ADR.
 
-## Non-negotiable rules
-1. Contract first. API changes start in `api/openapi.yaml`; code and TS types follow.
-2. All SQL is parameterized. Identifiers go through `Driver.QuoteIdent`. No string-built values.
-3. Never log or return passwords/DSNs. Secrets only via env or the encrypted store.
-4. Edits from the UI go through a ChangeSet: preview SQL, then apply in one transaction.
-   Tables without PK/unique key are read-only in the UI.
-5. Connections tagged `prod` are read-only by default.
-6. Every query from the UI has a default row limit and a timeout.
-7. No cgo. Static binaries only (SQLite via modernc).
-8. Do not add telemetry or network calls other than to the user's databases.
-9. Do not copy third-party branding, icons or assets. Icons: Lucide or Tabler (check license).
+## Обязательные правила
+1. Сначала обновляйте контракт: изменения API начинаются в `api/openapi.yaml`, затем обновляются код и типы TypeScript.
+2. Все значения SQL передавайте параметрами. Идентификаторы обрабатывайте через `Driver.QuoteIdent`.
+3. Не журналируйте и не возвращайте пароли и DSN. Секреты храните только в окружении или зашифрованном хранилище.
+4. Изменения интерфейса проводите через ChangeSet: предварительный просмотр SQL, затем применение одной транзакцией. Таблицы без первичного или уникального ключа доступны только для чтения.
+5. Подключения с тегом `prod` по умолчанию доступны только для чтения.
+6. Для каждого запроса из интерфейса задавайте лимит строк и тайм-аут.
+7. Не используйте cgo. Сборки статические; SQLite — через modernc.
+8. Не добавляйте телеметрию или сетевые вызовы, кроме обращений к базам данных пользователя.
+9. Не копируйте брендинг и материалы третьих лиц. Используйте Lucide или Tabler и проверяйте лицензии.
 
-## Working with agents
-Project subagents live in `.claude/agents/`:
-- `backend-go` - owns `backend/`, `deploy/`, and implements `api/openapi.yaml`.
-- `frontend-svelte` - owns `frontend/`. Develops against a mock server built from the contract.
-- `code-reviewer` - read-only review of diffs.
+## Работа с агентами
+Профили проектных агентов находятся в `.claude/agents/`:
+- `backend-go` отвечает за `backend/`, `deploy/` и реализацию контракта `api/openapi.yaml`.
+- `frontend-svelte` отвечает за `frontend/` и разрабатывает его с mock-сервером по контракту.
+- `code-reviewer` проверяет изменения только для чтения.
 
-Subagents cannot spawn other subagents, so the MAIN session orchestrates:
-1. Agree the contract (main session, plan mode). Commit it.
-2. Delegate backend and frontend work in parallel ONLY when the file sets do not overlap.
-3. Ask `code-reviewer` before merging anything non-trivial.
-4. If an agent needs a contract change, it edits `api/openapi.yaml` minimally and reports it
-   explicitly; the main session decides whether the other side must adapt.
+Агенты не создают дочерние сессии, поэтому главная сессия координирует работу:
+1. Сначала согласуйте контракт и зафиксируйте его.
+2. Делегируйте backend и frontend параллельно только при непересекающихся наборах файлов.
+3. Перед слиянием существенных изменений попросите `code-reviewer` выполнить проверку.
+4. Если агенту требуется изменить контракт, он вносит минимальное изменение в `api/openapi.yaml` и явно сообщает об этом. Главная сессия решает, нужно ли адаптировать другую часть приложения.
 
-## Commands (see Makefile)
+## Команды (см. Makefile)
 `make db-up`, `make be-run`, `make be-test`, `make fe-dev`, `make gen-types`, `make mock`,
 `make docker-build`.
 
 ## Git
-Small commits, imperative messages (`Add keyset pagination for MySQL driver`).
-Never push, force-push or rewrite history without being asked.
+Делайте небольшие коммиты с повелительным сообщением на английском языке (`Add keyset pagination for MySQL driver`).
+Не отправляйте изменения, не используйте force-push и не переписывайте историю без просьбы пользователя.
 
-## Definition of done
-Builds, tests pass, `go vet` / `npm run check` clean, contract and code agree,
-docs updated if behavior changed.
+## Критерии готовности
+Сборка и тесты проходят; `go vet` и `npm run check` завершаются без ошибок; контракт согласован с кодом;
+при изменении поведения обновлена документация.
 EOF
 
 write Makefile <<'EOF'
@@ -175,108 +173,96 @@ EOF
 write .claude/agents/backend-go.md <<'EOF'
 ---
 name: backend-go
-description: Go backend engineer for Nichosi. Use proactively for anything under backend/ or deploy/, for implementing endpoints from api/openapi.yaml, database drivers (MySQL, PostgreSQL, SQLite), SQL generation, the ChangeSet logic, relation inference, statistics, and Go tests.
+description: Инженер Go-backend для Nichosi. Используйте для задач в backend/ и deploy/, реализации api/openapi.yaml, драйверов MySQL/PostgreSQL/SQLite, генерации SQL, ChangeSet, связей, статистики и Go-тестов.
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: inherit
 ---
 
-You are the Go backend engineer on Nichosi, an open-source database client.
+Вы — инженер Go-backend проекта Nichosi, открытого клиента для баз данных.
 
-Before starting, read: /CLAUDE.md, /backend/CLAUDE.md, /docs/architecture.md, /api/openapi.yaml.
+Перед началом прочитайте: /AGENTS.md, /backend/AGENTS.md, /docs/architecture.md, /api/openapi.yaml.
 
-Scope
-- You may edit: backend/, deploy/, Makefile, api/openapi.yaml (minimal changes only).
-- You must NOT edit frontend/. If the frontend must change, say so in your report.
+## Область ответственности
+- Можно изменять `backend/`, `deploy/`, `Makefile` и минимально `api/openapi.yaml`.
+- Нельзя изменять `frontend/`; если он тоже требует изменений, сообщите об этом в отчёте.
 
-How you work
-- Implement exactly what the contract says. If the contract is wrong or incomplete, make the
-  smallest possible edit to api/openapi.yaml and flag it at the top of your report.
-- Put dialect-specific SQL only inside internal/driver implementations.
-- Write table-driven tests. Integration tests use the MySQL from `make db-up` and must be
-  skipped (not failed) when it is unavailable.
-- Run `gofmt`, `go vet ./...`, `go test ./...` before reporting.
-- Never log secrets. Never build SQL values by string concatenation.
+## Порядок работы
+- Следуйте контракту. Если он ошибочен или неполон, внесите минимальное изменение и явно укажите это в отчёте.
+- Размещайте диалектный SQL только в реализациях `internal/driver`.
+- Пишите табличные тесты; интеграционные тесты пропускайте, если MySQL из `make db-up` недоступна.
+- Перед отчётом выполните `gofmt`, `go vet ./...`, `go test ./...`.
+- Не журналируйте секреты и не собирайте значения SQL конкатенацией строк.
 
-Report format (keep it short)
-1. What changed (files, one line each)
-2. Contract changes (or "none")
-3. How to verify (exact commands)
-4. Open questions / risks
+## Краткий отчёт
+1. Что изменено (по одной строке на файл).
+2. Изменения контракта или «нет».
+3. Как проверить (точные команды).
+4. Открытые вопросы и риски.
 EOF
 
 write .claude/agents/frontend-svelte.md <<'EOF'
 ---
 name: frontend-svelte
-description: Svelte + TypeScript frontend engineer for Nichosi. Use proactively for anything under frontend/: the data grid, ChangeSet UI, relations graph, statistics views, SQL editor, theming, and frontend tests. Works against the mock server built from api/openapi.yaml.
+description: Инженер Svelte + TypeScript для frontend проекта Nichosi. Используйте для задач в frontend/: таблица данных, ChangeSet, граф связей, статистика, SQL-редактор, темы и тесты. Разработка по mock-серверу api/openapi.yaml.
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: inherit
 ---
 
-You are the frontend engineer on Nichosi, an open-source database client.
+Вы — frontend-инженер проекта Nichosi, открытого клиента для баз данных.
 
-Before starting, read: /CLAUDE.md, /frontend/CLAUDE.md, /api/openapi.yaml, and look at the
-reference images in /docs/design/ (the target look and layout).
+Перед началом прочитайте: /AGENTS.md, /frontend/AGENTS.md, /api/openapi.yaml и направление дизайна в /docs/design/.
 
-Scope
-- You may edit: frontend/ only.
-- You must NOT edit backend/ or api/openapi.yaml. If the contract blocks you, stop and report
-  exactly what is missing or wrong.
+## Область ответственности
+- Можно изменять только `frontend/`.
+- Нельзя изменять `backend/` и `api/openapi.yaml`. Если контракт мешает работе, точно укажите, чего не хватает или что неверно.
 
-How you work
-- Types come from the contract: run `make gen-types`, never hand-write API types.
-- Develop against `make mock` (Prism) so you never wait for the backend.
-- Large tables must be virtualized. Cell edits go into a ChangeSet store, not straight to the API.
-- Dark theme first, using CSS variables so a light theme can be added later.
-- Do not copy third-party icons or branding. Use Lucide or Tabler.
-- Run `npm run check` and `npm run build` (and tests if present) before reporting.
+## Порядок работы
+- Генерируйте типы API через `make gen-types`, не описывайте их вручную.
+- Разрабатывайте через `make mock` (Prism); большие таблицы виртуализируйте.
+- Изменения ячеек накапливайте в ChangeSet store, а не отправляйте напрямую в API.
+- Следуйте оригинальному направлению дизайна. Не копируйте сторонние значки, интерфейсы или брендинг; используйте Lucide или Tabler и проверяйте лицензии.
+- Перед отчётом выполните `npm run check` и `npm run build`.
 
-Report format (keep it short)
-1. What changed (files, one line each)
-2. Contract gaps found (or "none")
-3. How to verify (exact commands)
-4. Open questions / risks
+## Краткий отчёт
+1. Что изменено (по одной строке на файл).
+2. Проблемы контракта или «нет».
+3. Как проверить (точные команды).
+4. Открытые вопросы и риски.
 EOF
 
 write .claude/agents/code-reviewer.md <<'EOF'
 ---
 name: code-reviewer
-description: Read-only reviewer for Nichosi changes. Use after backend or frontend work, before committing or merging. Checks SQL safety, secret handling, contract drift, error handling, and test coverage.
+description: Рецензент изменений Nichosi с доступом только для чтения. Проверяет безопасность SQL, секреты, соответствие контракту, обработку ошибок и тесты.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
 
-You review code for Nichosi. You never modify files.
+Вы проверяете код Nichosi и никогда не изменяете файлы.
 
-Run `git diff` (and `git diff --staged`) to see the change, then check:
-1. SQL safety: parameterized values, identifiers quoted via the driver, row limits and timeouts.
-2. Secrets: no passwords/DSNs in logs, errors, responses, fixtures, or committed files.
-3. Contract drift: code and frontend usage match api/openapi.yaml.
-4. Edit safety: ChangeSet applies in one transaction; prod/read-only rules respected.
-5. Errors and context cancellation handled; no goroutine leaks.
-6. Tests exist for new behavior.
+Просмотрите `git diff` и `git diff --staged`, затем проверьте:
+1. SQL: значения передаются параметрами, идентификаторы экранируются драйвером, заданы лимиты и тайм-ауты.
+2. Секреты: пароли и DSN отсутствуют в журналах, ошибках, ответах, фикстурах и коммитах.
+3. Контракт: код согласован с `api/openapi.yaml`.
+4. Изменения: ChangeSet применяется одной транзакцией; соблюдаются правила `prod` и read-only.
+5. Обрабатываются ошибки и отмена контекста; нет утечек горутин.
+6. Для нового поведения есть тесты.
 
-Output: a list of findings ordered by severity (blocker / should fix / nit), each with
-file:line and a concrete suggestion. If there are no blockers, say so plainly.
+Выведите замечания по убыванию серьёзности (блокер / следует исправить / мелочь), укажите `файл:строка` и конкретное предложение. Если блокеров нет, скажите об этом прямо.
 EOF
 
 # ---------------------------------------------------------------- backend
-write backend/CLAUDE.md <<'EOF'
+write backend/AGENTS.md <<'EOF'
 # Backend (Go)
 
-- Go, standard library first: `net/http` with the Go 1.22+ pattern mux, `log/slog`, `context` everywhere.
-- Drivers: `go-sql-driver/mysql`, `pgx`, `modernc.org/sqlite` (no cgo).
-- Server types/stubs are generated from `../api/openapi.yaml` (use oapi-codegen; check its current
-  docs for options). Do not hand-write request/response types that the contract defines.
-- Layout:
-  - `cmd/nichosi`        entrypoint (config from env, wiring only)
-  - `internal/driver`    `Driver` interface + per-dialect implementations (ALL dialect SQL lives here)
-  - `internal/service`   ConnService, SchemaService, DataService, RelationService, StatsService, ChangeSet
-  - `internal/httpapi`   HTTP handlers, auth middleware, error mapping
-  - `internal/store`     local SQLite: profiles, history, manual relations, stats cache; encrypted secrets
-- Config via env: `NICHOSI_ADDR` (default `127.0.0.1:8080`), `NICHOSI_DATA_DIR`, `NICHOSI_SECRET_KEY`.
-- Binding to 0.0.0.0 must be an explicit choice. Admin auth is required before any non-loopback bind.
-- Errors: wrap with `%w`, map to the contract's Error schema at the HTTP edge only.
-- Tests: table-driven; integration tests use `make db-up` and skip when unavailable.
+- В первую очередь используйте стандартную библиотеку Go: `net/http` с маршрутизатором Go 1.22+, `log/slog` и `context`.
+- Драйверы: `go-sql-driver/mysql`, `pgx`, `modernc.org/sqlite` (без cgo).
+- Типы и заглушки сервера генерируются из `../api/openapi.yaml` через oapi-codegen. Не пишите вручную типы запросов и ответов, определённые контрактом.
+- Структура: `cmd/nichosi` — точка входа; `internal/driver` — интерфейс `Driver` и весь диалектный SQL; `internal/service` — сервисы и ChangeSet; `internal/httpapi` — обработчики и middleware; `internal/store` — локальная SQLite и зашифрованные секреты.
+- Конфигурация через `NICHOSI_ADDR` (по умолчанию `127.0.0.1:8080`), `NICHOSI_DATA_DIR`, `NICHOSI_SECRET_KEY`.
+- Привязка к `0.0.0.0` должна быть явным выбором. До привязки к адресу вне loopback требуется аутентификация администратора.
+- Оборачивайте ошибки с `%w`; преобразуйте их в схему `Error` из контракта только на HTTP-границе.
+- Пишите табличные тесты. Интеграционные тесты используют MySQL из `make db-up` и пропускаются, если база недоступна.
 EOF
 
 write backend/cmd/nichosi/main.go <<'EOF'
@@ -315,22 +301,17 @@ if [ ! -f backend/go.mod ]; then
 fi
 
 # ---------------------------------------------------------------- frontend
-write frontend/CLAUDE.md <<'EOF'
+write frontend/AGENTS.md <<'EOF'
 # Frontend (Svelte + TypeScript)
 
-- Svelte + Vite + TypeScript (strict). The app is created by the frontend agent as its first
-  task (`npm create vite@latest . -- --template svelte-ts`), then dependencies are added.
-- API types are generated: `make gen-types` -> `src/lib/api/schema.d.ts`. Use a thin typed client
-  (e.g. openapi-fetch). Never hand-write types for contract objects.
-- Work against `make mock` (Prism on :4010); switch the dev proxy to the real backend later.
-- Libraries: CodeMirror 6 (SQL editor), Cytoscape.js (relations graph), a virtualized grid
-  (write a small one or use a maintained library; check its license).
-- Layout reference: `../docs/design/*.png` (dark IDE style: tree left, grid center, inspector right,
-  bottom "Changes" panel with SQL preview and Apply/Discard).
-- Theme: CSS variables on `:root`; dark first.
-- State: Svelte stores. Cell edits accumulate in a ChangeSet store; Apply sends the whole set.
-- Accessibility: keyboard navigation in the grid, visible focus, no color-only meaning.
-- Scripts expected: `dev`, `build`, `check`, `test`.
+- Используйте Svelte, Vite и TypeScript в строгом режиме.
+- Типы API генерируются командой `make gen-types` в `src/lib/api/schema.d.ts`. Не описывайте вручную типы объектов контракта.
+- Разрабатывайте через `make mock` (Prism на `:4010`); позднее переключите прокси на backend.
+- Используйте CodeMirror 6 для SQL-редактора, Cytoscape.js для графа связей и виртуализированную таблицу; проверяйте лицензии зависимостей.
+- Следуйте оригинальному направлению дизайна из `../docs/design/README.md`. Не копируйте интерфейсы, брендинг, значки и материалы других продуктов.
+- Сначала реализуйте тёмную тему на CSS-переменных. Изменения ячеек накапливайте в ChangeSet store.
+- Обеспечьте навигацию с клавиатуры, видимый фокус и передачу значения не только цветом.
+- Необходимые скрипты: `dev`, `build`, `check`, `test`.
 EOF
 
 # ---------------------------------------------------------------- api contract
@@ -748,8 +729,14 @@ parameterized SQL only; row limit and timeout on every UI query; audit log of wr
 EOF
 
 write docs/design/README.md <<'EOF'
-Put the UI reference images here (for example `db-editor-datagrip-style.png`).
-The frontend agent uses them as the target look and layout.
+Nichosi uses an original visual identity designed for this project. Do not use screenshots,
+logos, product names, or distinctive layouts from other database tools as design targets.
+
+The interface direction is a quiet, local-first workspace: deep forest charcoal surfaces,
+soft sage highlights, generous spacing, restrained motion, and clear data hierarchy. Use
+licensed icon libraries (Lucide or Tabler) and check the relevant package license before
+redistributing bundled assets. Do not imply a database feature works until it is connected
+to the API.
 EOF
 
 # ---------------------------------------------------------------- deploy
@@ -889,9 +876,8 @@ fi
 
 cat <<EOF
 
-Done. Next steps:
-  1. Copy your UI mockup PNGs into docs/design/
-  2. Review CLAUDE.md and api/openapi.yaml, then: git add -A && git commit -m "Scaffold project"
-  3. Start Claude Code in this folder (run: claude) and check /agents shows backend-go,
-     frontend-svelte and code-reviewer.
+Готово. Далее:
+  1. Если есть собственные макеты интерфейса, поместите их в docs/design/.
+  2. Проверьте AGENTS.md и api/openapi.yaml.
+  3. Продолжайте разработку, опираясь на инструкции выбранного помощника.
 EOF

@@ -1,8 +1,11 @@
 # Nichosi
 
-Open-source database client with a modern dark UI: connections, table editing
-with a reviewable ChangeSet, relations graph (real and inferred links), statistics.
+Nichosi is an open-source database workspace for exploring, querying, and understanding
+MySQL/MariaDB first, with PostgreSQL and SQLite planned next.
 
-Status: early development.
+The project is in early development. The current Svelte interface is a visual prototype;
+live database connections and credential storage are not implemented yet.
 
-See `CLAUDE.md` for contributor/agent rules and `docs/architecture.md` for design.
+See `AGENTS.md` and the backend/frontend `AGENTS.md` files for contributor rules.
+See `docs/architecture.md` for the planned system design.
+See `docs/design/README.md` for the original visual direction and asset guidance.

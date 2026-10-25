@@ -20,10 +20,10 @@ be-vet: ## backend static checks
 > cd backend && go vet ./...
 
 fe-install: ## install frontend deps
-> cd frontend && npm install
+> cd frontend && corepack pnpm install
 
 fe-dev: ## frontend dev server
-> cd frontend && npm run dev
+> cd frontend && corepack pnpm dev
 
 gen-types: ## generate TS types from the OpenAPI contract
 > cd frontend && npx openapi-typescript ../api/openapi.yaml -o src/lib/api/schema.d.ts
