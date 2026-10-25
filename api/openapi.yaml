@@ -177,7 +177,7 @@ components:
       enum: [dev, stage, prod]
     Connection:
       type: object
-      required: [id, name, driver, host, port, user, database, environment, readOnly, databaseSizeBytes, lastConnectedAt, databaseCreatedAt]
+      required: [id, name, driver, host, port, user, database, environment, readOnly, databaseSizeBytes, lastConnectedAt]
       properties:
         id: { type: string }
         name: { type: string }
@@ -190,7 +190,6 @@ components:
         readOnly: { type: boolean }
         databaseSizeBytes: { type: integer, format: int64, nullable: true, description: "Database size in bytes; null when unavailable" }
         lastConnectedAt: { type: string, format: date-time, nullable: true }
-        databaseCreatedAt: { type: string, format: date-time, nullable: true, description: MySQL does not expose a reliable database creation timestamp }
     ConnectionInput:
       type: object
       required: [name, driver, host, port, user, password, database, environment]

@@ -181,11 +181,6 @@ export interface components {
             databaseSizeBytes: number | null;
             /** Format: date-time */
             lastConnectedAt: string | null;
-            /**
-             * Format: date-time
-             * @description MySQL does not expose a reliable database creation timestamp
-             */
-            databaseCreatedAt: string | null;
         };
         ConnectionInput: {
             name: string;

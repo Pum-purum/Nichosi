@@ -125,9 +125,6 @@ type ColumnProfile struct {
 type Connection struct {
 	Database string `json:"database"`
 
-	// DatabaseCreatedAt MySQL does not expose a reliable database creation timestamp
-	DatabaseCreatedAt *time.Time `json:"databaseCreatedAt"`
-
 	// DatabaseSizeBytes Database size in bytes; null when unavailable
 	DatabaseSizeBytes *int64           `json:"databaseSizeBytes"`
 	Driver            ConnectionDriver `json:"driver"`

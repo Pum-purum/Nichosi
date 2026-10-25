@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, Check, Database, LockKeyhole, Plus, ShieldCheck, X } from '@lucide/svelte';
+  import { ArrowRight, Check, Clock, Database, HardDrive, LockKeyhole, Plus, Server, ShieldCheck, UserRound, X } from '@lucide/svelte';
   import type { components } from './lib/api/schema';
 
   type Connection = components['schemas']['Connection'];
@@ -126,9 +126,17 @@
         <div class="connection-list">
           {#each connections as connection (connection.id)}
             <article class="connection-card">
-              <div class="connection-main"><span class="database-icon amber"><Database size={19} strokeWidth={1.7} /></span><div class="connection-title"><h2>{connection.name}</h2><p>{connection.database}<span>·</span>{connection.host}:{connection.port}</p></div><span class="preview-badge connected"><span></span> Connected</span></div>
-              <dl class="connection-details"><div><dt>DATABASE TYPE</dt><dd>{connection.driver.toUpperCase()}</dd></div><div><dt>DATABASE SIZE</dt><dd>{formatBytes(connection.databaseSizeBytes)}</dd></div><div><dt>LAST CONNECTION</dt><dd>{formatDate(connection.lastConnectedAt)}</dd></div><div><dt>DATABASE CREATED</dt><dd>{formatDate(connection.databaseCreatedAt)}</dd></div></dl>
-              {#if connection.readOnly}<div class="production-note"><ShieldCheck size={14} /> Production connections are read-only.</div>{/if}
+              <div class="connection-row">
+                <span class="connection-type" role="img" aria-label={connection.driver.toUpperCase()} title={connection.driver.toUpperCase()}><Database size={17} strokeWidth={1.8} /></span>
+                <span class="connection-name" title={connection.name}>{connection.name}</span>
+                <span class="connection-meta" title="Host and port"><Server size={14} /><span>{connection.host}:{connection.port}</span></span>
+                <span class="connection-meta" title="Database user"><UserRound size={14} /><span>{connection.user}</span></span>
+                <span class="connection-meta" title="Database"><Database size={14} /><span>{connection.database}</span></span>
+                <span class="connection-meta" title="Database size"><HardDrive size={14} /><span>{formatBytes(connection.databaseSizeBytes)}</span></span>
+                <span class="connection-meta connection-time" title="Last connection"><Clock size={14} /><span>{formatDate(connection.lastConnectedAt)}</span></span>
+                {#if connection.readOnly}<span class="connection-readonly" title="Production · read-only"><ShieldCheck size={14} /> Prod</span>{/if}
+                <span class="preview-badge connected"><span></span> Connected</span>
+              </div>
             </article>
           {/each}
         </div>
