@@ -1,0 +1,35 @@
+export type CellKind = 'null' | 'integer' | 'decimal' | 'text' | 'boolean' | 'enum' | 'set' | 'date' | 'time' | 'datetime' | 'json' | 'binary' | 'uuid' | 'other';
+
+export function columnKind(sqlType: string): CellKind {
+  const rawType = sqlType.trim().toLowerCase();
+  const type = rawType.replace(/\(.*/, '').trim();
+  if (/^tinyint\(1\)/.test(rawType)) return 'boolean';
+  if (/^(bool|boolean)$/.test(type)) return 'boolean';
+  if (type === 'enum') return 'enum';
+  if (type === 'set') return 'set';
+  if (/^(tinyint|smallint|mediumint|int|integer|bigint|int2|int4|int8|serial|smallserial|bigserial|year)(\s|$)/.test(type)) return 'integer';
+  if (/^(decimal|numeric|number|float|float4|float8|double|real|money)(\s|$)/.test(type)) return 'decimal';
+  if (/^(datetime|timestamp|timestamptz)(\s|$)/.test(type)) return 'datetime';
+  if (type === 'date') return 'date';
+  if (/^(time|timetz|interval)(\s|$)/.test(type)) return 'time';
+  if (/^(json|jsonb)$/.test(type)) return 'json';
+  if (/^(binary|varbinary|tinyblob|blob|mediumblob|longblob|bytea|bit|varbit)(\s|$)/.test(type)) return 'binary';
+  if (type === 'uuid') return 'uuid';
+  if (/^(char|character|varchar|nvarchar|nchar|text|tinytext|mediumtext|longtext|citext|clob)(\s|$)/.test(type)) return 'text';
+  return 'other';
+}
+
+export function cellValue(value: unknown, sqlType: string) {
+  const kind = value === null ? 'null' : columnKind(sqlType);
+  // Keep strings and decimal encodings intact; never parse values through Number or Date.
+  const rawText = value === null ? 'NULL'
+    : typeof value === 'string' ? value
+    : typeof value === 'object' ? JSON.stringify(value)
+    : String(value);
+  const text = ['date', 'time', 'datetime'].includes(kind) && typeof rawText === 'string'
+    ? rawText.replace('T', '  T  ') : rawText;
+  const localTime = (kind === 'date' || kind === 'time' || kind === 'datetime') && typeof value === 'string'
+    ? new Date(value).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }) : null;
+  const label = localTime ? `${sqlType}: ${localTime} (browser timezone)` : kind === 'null' ? 'SQL NULL' : `${sqlType || 'Unknown type'}: ${text}`;
+  return { kind, text, label, numeric: kind === 'integer' || kind === 'decimal' };
+}
