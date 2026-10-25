@@ -1,25 +1,85 @@
 # Nichosi
 
-Nichosi is an open-source database workspace for exploring, querying, and understanding
-MySQL/MariaDB first, with PostgreSQL and SQLite planned next.
+Nichosi is a web app for browsing database tables. It currently connects to MySQL and MariaDB. PostgreSQL and SQLite are not available yet.
 
-The Docker image contains only the Nichosi application. Database connections are loaded
-from the host-side `connections.json` file. This file can contain passwords in plain text,
-so keep it local; it is ignored by Git and mounted read-only into the app container.
+## What you need
 
-## Run Nichosi in Docker
+- Docker with the Docker Compose plugin.
+- A running MySQL or MariaDB server that the Nichosi container can reach.
+- The database name, host, port, user name, and password.
 
-1. Run `make app-up` to build and start the application. If `connections.json` does not
-   exist, the command copies `connections.example.json` to the ignored local file.
-2. Edit the example profile or add profiles to the `connections` array. Enter each database
-   password in its `password` field.
-3. Open <http://127.0.0.1:8080>. Restart the app after changing `connections.json` to reload
-   profiles.
-4. Run `make app-down` to stop the application.
+## Start the app
 
-The app port is bound to loopback only. The connections file is excluded from the image
-build and bind-mounted read-only.
+Open a terminal and download the project:
 
-See `AGENTS.md` and the backend/frontend `AGENTS.md` files for contributor rules.
-See `docs/architecture.md` for the planned system design.
-See `docs/design/README.md` for the original visual direction and asset guidance.
+```sh
+git clone https://github.com/Pum-purum/Nichosi.git
+cd Nichosi
+```
+
+Run the following commands from the `Nichosi` folder.
+
+1. Create your local connection file:
+
+   ```sh
+   cp connections.example.json connections.json
+   ```
+
+2. Open `connections.json` and replace the example values with your database details. The file contains your password, so keep it private. It is ignored by Git and is not copied into the Docker image.
+
+   ```json
+   {
+     "connections": [
+       {
+         "name": "My database",
+         "driver": "mysql",
+         "host": "host.docker.internal",
+         "port": 3306,
+         "user": "database_user",
+         "database": "database_name",
+         "environment": "dev",
+         "password": "your-password"
+       }
+     ]
+   }
+   ```
+
+   `host` must be an address the Docker container can reach. If your database runs in another container, use that container's service name and make sure both containers share a Docker network. If it runs on your computer, `host.docker.internal` usually works with Docker Desktop; on Linux, configure a host address that is reachable from Docker.
+
+   You can add more database objects to the `connections` array. Use `"environment": "prod"` for production connections; Nichosi treats those connections as read-only.
+
+3. Build and start Nichosi:
+
+   ```sh
+   make app-up
+   ```
+
+   This builds the app's Docker image and starts the container in the background. The first build can take a few minutes.
+
+4. Open <http://127.0.0.1:8080> in your browser. Choose your connection to see its tables and table data.
+
+If the app started before you finished editing `connections.json`, restart it to reload the file:
+
+```sh
+docker compose -f deploy/docker-compose.yml restart
+```
+
+## Stop the app
+
+```sh
+make app-down
+```
+
+The web app is available only from your own computer by default. Docker mounts `connections.json` as read-only. Do not commit this file or share it: it contains database passwords.
+
+## Troubleshooting
+
+- **No connections appear:** Check that `connections.json` contains valid details and valid JSON, then restart the app.
+- **The database cannot be reached:** Check the host and port from inside Docker. A database address that works on your computer may not work from a container.
+- **The page does not open:** Check that Docker is running and port `8080` is not already in use. View container logs with `docker compose -f deploy/docker-compose.yml logs`.
+
+## Project information
+
+- [Architecture](docs/architecture.md)
+- [Design guidance](docs/design/README.md)
+- [Contributor instructions](AGENTS.md)
