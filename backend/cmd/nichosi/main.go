@@ -185,13 +185,23 @@ func (a *app) getSchema(w http.ResponseWriter, r *http.Request) {
 		}
 		columns.Close()
 	}
-	objects, err := item.pool.QueryContext(ctx, "SELECT TABLE_NAME, 'view' FROM information_schema.views WHERE TABLE_SCHEMA = ? UNION ALL SELECT TRIGGER_NAME, 'trigger' FROM information_schema.triggers WHERE TRIGGER_SCHEMA = ? ORDER BY 2,1", item.Database, item.Database)
+	objects, err := item.pool.QueryContext(ctx, "SELECT TABLE_NAME, 'view' FROM information_schema.views WHERE TABLE_SCHEMA = ? UNION ALL SELECT TRIGGER_NAME, 'trigger' FROM information_schema.triggers WHERE TRIGGER_SCHEMA = ? UNION ALL SELECT ROUTINE_NAME, CASE ROUTINE_TYPE WHEN 'PROCEDURE' THEN 'procedure' ELSE 'function' END FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? UNION ALL SELECT EVENT_NAME, 'event' FROM information_schema.events WHERE EVENT_SCHEMA = ? ORDER BY 2,1", item.Database, item.Database, item.Database, item.Database)
 	if err == nil {
 		defer objects.Close()
 		for objects.Next() {
 			var object DatabaseObject
 			if objects.Scan(&object.Name, &object.Type) == nil {
 				schema.Objects = append(schema.Objects, object)
+			}
+		}
+	}
+	roles, err := item.pool.QueryContext(ctx, "SELECT DISTINCT FROM_USER FROM mysql.role_edges ORDER BY FROM_USER")
+	if err == nil {
+		defer roles.Close()
+		for roles.Next() {
+			var role string
+			if roles.Scan(&role) == nil {
+				schema.Objects = append(schema.Objects, DatabaseObject{Name: role, Type: "role"})
 			}
 		}
 	}

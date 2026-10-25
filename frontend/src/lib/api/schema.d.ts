@@ -220,7 +220,7 @@ export interface components {
         };
         DatabaseObject: {
             name: string;
-            type: "view" | "trigger" | "procedure" | "function" | "event";
+            type: "view" | "trigger" | "procedure" | "function" | "event" | "role";
         };
         Filter: {
             column: string;
