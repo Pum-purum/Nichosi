@@ -1,21 +1,19 @@
 <script lang="ts">
-  import { ArrowRight, Clock, Database, FileText, HardDrive, LockKeyhole, Plus, Server, ShieldCheck, UserRound, X } from '@lucide/svelte';
+  import { Clock, Database, FileText, HardDrive, LockKeyhole, Plus, Server, ShieldCheck, UserRound, X } from '@lucide/svelte';
+  import { onMount } from 'svelte';
   import type { components } from './lib/api/schema';
 
   type Connection = components['schemas']['Connection'];
 
-  let adminToken = $state('');
-  let tokenDraft = $state('');
-  let showTokenForm = $state(true);
   let showConnectionHelp = $state(false);
   let connections = $state<Connection[]>([]);
   let error = $state('');
-  let busy = $state(false);
+  let loading = $state(true);
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetch(path, {
       ...init,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}`, ...init.headers },
+      headers: { 'Content-Type': 'application/json', ...init.headers },
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
@@ -24,19 +22,17 @@
     return response.json() as Promise<T>;
   }
 
-  async function unlock(event: SubmitEvent) {
-    event.preventDefault();
-    adminToken = tokenDraft.trim();
-    busy = true;
+  async function loadConnections() {
+    loading = true;
     error = '';
     try {
       connections = await request<Connection[]>('/api/connections');
-      showTokenForm = false;
     } catch (cause) {
-      adminToken = '';
-      error = cause instanceof Error ? cause.message : 'Could not authorize';
-    } finally { busy = false; }
+      error = cause instanceof Error ? cause.message : 'Could not load connections';
+    } finally { loading = false; }
   }
+
+  onMount(() => { void loadConnections(); });
 
   function closeHelp() { showConnectionHelp = false; }
   function handleWindowKeydown(event: KeyboardEvent) { if (event.key === 'Escape') closeHelp(); }
@@ -86,22 +82,24 @@
   <header class="topbar">
     <a class="brand" href="#home" aria-label="Nichosi home"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span class="brand-name">nichosi<span>.</span></span></a>
     <span class="workspace-label">DATABASE WORKSPACE</span>
-    {#if !showTokenForm && connections.length > 0}<button class="primary-button header-action" onclick={() => (showConnectionHelp = true)}><Plus size={16} /> Add connection</button>{/if}
+    {#if !loading && !error && connections.length > 0}<button class="primary-button header-action" onclick={() => (showConnectionHelp = true)}><Plus size={16} /> Add connection</button>{/if}
   </header>
 
   <main class:has-connections={connections.length > 0}>
-    {#if showTokenForm}
+    {#if loading}
       <section class="empty-state" aria-labelledby="empty-title">
-        <div class="empty-icon"><LockKeyhole size={24} /></div>
-        <span class="eyebrow">LOCAL ADMIN ACCESS</span>
-        <h1 id="empty-title">Unlock your workspace.</h1>
-        <p>Enter the admin token from the project’s local <code>.env</code> file. It stays in this browser session only.</p>
-        <form class="unlock-form" onsubmit={unlock}>
-          <label class="field-label">Admin token<input bind:value={tokenDraft} type="password" autocomplete="off" placeholder="Paste NICHOSI_ADMIN_TOKEN" required /></label>
-          <button class="primary-button empty-action" type="submit" disabled={busy}>{busy ? 'Checking…' : 'Unlock workspace'} <ArrowRight size={15} /></button>
-        </form>
-        {#if error}<p class="error-message">{error}</p>{/if}
-        <div class="preview-note"><LockKeyhole size={13} /> Token is not stored on disk or in local storage.</div>
+        <div class="empty-icon"><Database size={24} strokeWidth={1.7} /></div>
+        <span class="eyebrow">DATABASE WORKSPACE</span>
+        <h1 id="empty-title">Loading connections.</h1>
+        <p>Reading saved profiles from <code>connections.json</code>.</p>
+      </section>
+    {:else if error}
+      <section class="empty-state" aria-labelledby="empty-title">
+        <div class="empty-icon"><Database size={24} strokeWidth={1.7} /></div>
+        <span class="eyebrow">DATABASE WORKSPACE</span>
+        <h1 id="empty-title">Could not load connections.</h1>
+        <p>{error}</p>
+        <button class="primary-button empty-action" onclick={() => void loadConnections()}>Try again</button>
       </section>
     {:else if connections.length === 0}
       <section class="empty-state" aria-labelledby="empty-title">

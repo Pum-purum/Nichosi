@@ -51,7 +51,8 @@ type app struct {
 func main() {
 	addr := env("NICHOSI_ADDR", "127.0.0.1:8080")
 	token := os.Getenv("NICHOSI_ADMIN_TOKEN")
-	if !isLoopback(addr) && len(token) < 24 {
+	localPreview := os.Getenv("NICHOSI_LOCAL_PREVIEW") == "true"
+	if !isLoopback(addr) && len(token) < 24 && !localPreview {
 		slog.Error("NICHOSI_ADMIN_TOKEN with at least 24 characters is required for non-loopback binding")
 		os.Exit(1)
 	}
