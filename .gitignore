@@ -1,0 +1,10 @@
+node_modules/
+dist/
+bin/
+*.db
+*.log
+.env
+.env.*
+.DS_Store
+.claude/settings.local.json
+backend/internal/web/dist/

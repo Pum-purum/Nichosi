@@ -1,0 +1,15 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: devpassword   # development only
+      MYSQL_DATABASE: bitrix_test
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./seed:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pdevpassword"]
+      interval: 5s
+      timeout: 3s
+      retries: 20

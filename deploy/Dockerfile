@@ -1,0 +1,25 @@
+# Skeleton: finalize after the frontend exists and the backend embeds frontend/dist.
+FROM node:22-alpine AS web
+WORKDIR /src/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+COPY api/ /src/api/
+RUN npm run build
+
+FROM golang:1.25-alpine AS build
+WORKDIR /src/backend
+COPY backend/go.mod backend/go.sum* ./
+RUN go mod download
+COPY backend/ ./
+COPY --from=web /src/frontend/dist ./internal/web/dist
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/nichosi ./cmd/nichosi \
+ && mkdir -p /out/data
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/nichosi /nichosi
+COPY --from=build --chown=65532:65532 /out/data /data
+ENV NICHOSI_ADDR=0.0.0.0:8080 NICHOSI_DATA_DIR=/data
+EXPOSE 8080
+VOLUME ["/data"]
+ENTRYPOINT ["/nichosi"]

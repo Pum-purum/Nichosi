@@ -1,0 +1,364 @@
+openapi: 3.0.3
+info:
+  title: Nichosi API
+  version: 0.1.0
+  description: >
+    Contract between the Go backend and the Svelte frontend.
+    Change it deliberately and report every change.
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /api/connections:
+    get:
+      operationId: listConnections
+      responses:
+        "200":
+          description: Saved connection profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Connection" }
+    post:
+      operationId: createConnection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectionInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connection" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/schema:
+    get:
+      operationId: getSchema
+      parameters: [ { $ref: "#/components/parameters/ConnId" } ]
+      responses:
+        "200":
+          description: Databases and tables
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schema" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/tables/{table}/rows:
+    post:
+      operationId: queryRows
+      description: Keyset-paginated rows with structured filters (never raw SQL).
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - { $ref: "#/components/parameters/Table" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RowsQuery" }
+      responses:
+        "200":
+          description: A page of rows
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RowsPage" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/tables/{table}/changes/preview:
+    post:
+      operationId: previewChanges
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - { $ref: "#/components/parameters/Table" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeSet" }
+      responses:
+        "200":
+          description: Generated SQL, nothing executed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangePreview" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/tables/{table}/changes/apply:
+    post:
+      operationId: applyChanges
+      description: Applies the whole ChangeSet in one transaction; rolls back on any error.
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - { $ref: "#/components/parameters/Table" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeSet" }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApplyResult" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/relations:
+    get:
+      operationId: getRelations
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - { name: table, in: query, required: true, schema: { type: string } }
+        - { name: depth, in: query, schema: { type: integer, minimum: 1, maximum: 3, default: 1 } }
+      responses:
+        "200":
+          description: Graph around the table
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RelationGraph" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/stats/tables:
+    get:
+      operationId: getTableStats
+      parameters: [ { $ref: "#/components/parameters/ConnId" } ]
+      responses:
+        "200":
+          description: Sizes per table
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TableStatsList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/stats/columns:
+    get:
+      operationId: getColumnProfile
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - { name: table, in: query, required: true, schema: { type: string } }
+        - { name: column, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Column profile (sampled)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ColumnProfile" }
+        default: { $ref: "#/components/responses/Error" }
+components:
+  parameters:
+    ConnId: { name: connId, in: path, required: true, schema: { type: string } }
+    Table: { name: table, in: path, required: true, schema: { type: string } }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties: { status: { type: string } }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+    Environment:
+      type: string
+      enum: [dev, stage, prod]
+    Connection:
+      type: object
+      required: [id, name, driver, host, port, user, database, environment, readOnly]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        driver: { type: string, enum: [mysql, postgres, sqlite] }
+        host: { type: string }
+        port: { type: integer }
+        user: { type: string }
+        database: { type: string }
+        environment: { $ref: "#/components/schemas/Environment" }
+        readOnly: { type: boolean }
+    ConnectionInput:
+      type: object
+      required: [name, driver, host, port, user, password, database, environment]
+      properties:
+        name: { type: string }
+        driver: { type: string, enum: [mysql, postgres, sqlite] }
+        host: { type: string }
+        port: { type: integer }
+        user: { type: string }
+        password: { type: string, writeOnly: true }
+        database: { type: string }
+        environment: { $ref: "#/components/schemas/Environment" }
+    ForeignRef:
+      type: object
+      required: [table, column]
+      properties:
+        table: { type: string }
+        column: { type: string }
+    Column:
+      type: object
+      required: [name, type, nullable, primaryKey]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        nullable: { type: boolean }
+        primaryKey: { type: boolean }
+        foreignKey:
+          allOf: [ { $ref: "#/components/schemas/ForeignRef" } ]
+          nullable: true
+    TableInfo:
+      type: object
+      required: [name, rowsEstimate, columns]
+      properties:
+        name: { type: string }
+        rowsEstimate: { type: integer, format: int64 }
+        columns:
+          type: array
+          items: { $ref: "#/components/schemas/Column" }
+    Schema:
+      type: object
+      required: [tables]
+      properties:
+        tables:
+          type: array
+          items: { $ref: "#/components/schemas/TableInfo" }
+    Filter:
+      type: object
+      required: [column, op]
+      properties:
+        column: { type: string }
+        op: { type: string, enum: [eq, ne, lt, lte, gt, gte, like, in, isNull, notNull] }
+        value: {}
+    OrderBy:
+      type: object
+      required: [column]
+      properties:
+        column: { type: string }
+        direction: { type: string, enum: [asc, desc], default: asc }
+    RowsQuery:
+      type: object
+      properties:
+        filters:
+          type: array
+          items: { $ref: "#/components/schemas/Filter" }
+        orderBy:
+          type: array
+          items: { $ref: "#/components/schemas/OrderBy" }
+        cursor: { type: string, nullable: true }
+        limit: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+    RowsPage:
+      type: object
+      required: [columns, rows, editable]
+      properties:
+        columns:
+          type: array
+          items: { $ref: "#/components/schemas/Column" }
+        rows:
+          type: array
+          description: Row values in column order. JSON null is SQL NULL.
+          items:
+            type: array
+            items: {}
+        nextCursor: { type: string, nullable: true }
+        editable: { type: boolean }
+        readOnlyReason: { type: string, nullable: true }
+    Change:
+      type: object
+      required: [op]
+      properties:
+        op: { type: string, enum: [insert, update, delete] }
+        key:
+          type: object
+          description: Primary/unique key column to value (update and delete).
+          additionalProperties: {}
+        values:
+          type: object
+          description: Column to new value (insert and update).
+          additionalProperties: {}
+    ChangeSet:
+      type: object
+      required: [changes]
+      properties:
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/Change" }
+    ChangePreview:
+      type: object
+      required: [statements, warnings]
+      properties:
+        statements: { type: array, items: { type: string } }
+        warnings: { type: array, items: { type: string } }
+    ApplyResult:
+      type: object
+      required: [applied, rolledBack]
+      properties:
+        applied: { type: integer }
+        rolledBack: { type: boolean }
+    RelationNode:
+      type: object
+      required: [table, rowsEstimate]
+      properties:
+        table: { type: string }
+        rowsEstimate: { type: integer, format: int64 }
+    RelationEdge:
+      type: object
+      required: [fromTable, fromColumn, toTable, toColumn, kind]
+      properties:
+        fromTable: { type: string }
+        fromColumn: { type: string }
+        toTable: { type: string }
+        toColumn: { type: string }
+        kind: { type: string, enum: [foreignKey, inferred, manual] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        orphanRatio: { type: number, nullable: true, minimum: 0, maximum: 1 }
+    RelationGraph:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes: { type: array, items: { $ref: "#/components/schemas/RelationNode" } }
+        edges: { type: array, items: { $ref: "#/components/schemas/RelationEdge" } }
+    TableStats:
+      type: object
+      required: [name, dataBytes, indexBytes, rowsEstimate]
+      properties:
+        name: { type: string }
+        dataBytes: { type: integer, format: int64 }
+        indexBytes: { type: integer, format: int64 }
+        rowsEstimate: { type: integer, format: int64 }
+    TableStatsList:
+      type: object
+      required: [tables]
+      properties:
+        tables: { type: array, items: { $ref: "#/components/schemas/TableStats" } }
+    ColumnProfile:
+      type: object
+      required: [nullRatio, distinct, top]
+      properties:
+        nullRatio: { type: number }
+        distinct: { type: integer, format: int64 }
+        min: {}
+        max: {}
+        top:
+          type: array
+          items:
+            type: object
+            required: [value, count]
+            properties:
+              value: {}
+              count: { type: integer, format: int64 }
+        histogram:
+          type: array
+          items:
+            type: object
+            required: [bucket, count]
+            properties:
+              bucket: { type: string }
+              count: { type: integer, format: int64 }
