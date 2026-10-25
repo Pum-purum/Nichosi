@@ -16,13 +16,12 @@ it is ignored by Git and mounted read-only into the app container.
    it copies `connections.example.json` to the ignored local `connections.json`.
 3. Copy `MYSQL_PASSWORD` from `.env` into the `password` field in `connections.json`.
 4. Restart Nichosi with `docker compose --env-file .env -f deploy/docker-compose.yml restart nichosi`.
-5. Open <http://127.0.0.1:8080>; the workspace loads without an admin-token prompt, and
-   the test database connection is loaded from the file.
+5. Open <http://127.0.0.1:8080>; Nichosi lists the configured profiles from the file.
 6. For a desktop SQL client on the host, use `127.0.0.1:3307`.
 
 Add other profiles to the `connections` array and enter each password in its `password`
-field. Restart Nichosi after changing the file so it reloads the profiles. The app shows
-an example profile and restart command from its connection help screen.
+field. Restart Nichosi after changing the file so it reloads the profiles. When no profiles
+are configured, the workspace explains how to add them to `connections.json`.
 
 The app runs in local-preview mode without an admin token, and its port is bound to
 loopback only. Do not expose this preview port to a network. The MySQL seed creates a small

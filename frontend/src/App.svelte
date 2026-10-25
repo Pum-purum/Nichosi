@@ -1,11 +1,10 @@
 <script lang="ts">
-  import { Clock, Database, FileText, HardDrive, LockKeyhole, Plus, Server, ShieldCheck, UserRound, X } from '@lucide/svelte';
+  import { Clock, Database, HardDrive, Server, ShieldCheck, UserRound } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import type { components } from './lib/api/schema';
 
   type Connection = components['schemas']['Connection'];
 
-  let showConnectionHelp = $state(false);
   let connections = $state<Connection[]>([]);
   let error = $state('');
   let loading = $state(true);
@@ -34,8 +33,6 @@
 
   onMount(() => { void loadConnections(); });
 
-  function closeHelp() { showConnectionHelp = false; }
-  function handleWindowKeydown(event: KeyboardEvent) { if (event.key === 'Escape') closeHelp(); }
   function formatBytes(bytes: number | null) {
     if (bytes === null) return 'Unavailable';
     if (bytes < 1024) return `${bytes} B`;
@@ -53,10 +50,9 @@
 
 {#snippet connectionInstructions()}
   <div class="config-instructions">
-    <div class="config-instructions-heading"><FileText size={17} /><div><span class="modal-eyebrow">CONNECTION PROFILES</span><h2 id="modal-title">Edit connections.json</h2></div></div>
-    <p class="config-description">Open this file in the project folder and edit its <code>connections</code> array.</p>
+    <p class="config-source">All database connections are loaded from <code>connections.json</code>.</p>
     <ol class="config-steps">
-      <li><span>01</span><p>The test profile is already there. Replace its empty <code>password</code> value, or add another object to the array.</p></li>
+      <li><span>01</span><p>Add a connection object and fill in its host, port, user and database name.</p></li>
       <li><span>02</span><p>Enter the password directly in the <code>password</code> field. This local file is excluded from Git and the Docker image.</p></li>
       <li><span>03</span><p>Save the file, then restart Nichosi to load the profile.</p></li>
     </ol>
@@ -70,33 +66,26 @@
   "environment": "dev",
   "password": "paste-password-here"
 }`}</code></pre>
-    <div class="config-restart"><span>RESTART COMMAND</span><code>docker compose --env-file .env -f deploy/docker-compose.yml restart nichosi</code></div>
-    <div class="config-footnote"><LockKeyhole size={12} /> The file is mounted read-only inside the app container.</div>
   </div>
 {/snippet}
 
-<svelte:window onkeydown={handleWindowKeydown} />
 <svelte:head><title>Databases · Nichosi</title></svelte:head>
 
 <div class="app-shell">
   <header class="topbar">
     <a class="brand" href="#home" aria-label="Nichosi home"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span class="brand-name">nichosi<span>.</span></span></a>
-    <span class="workspace-label">DATABASE WORKSPACE</span>
-    {#if !loading && !error && connections.length > 0}<button class="primary-button header-action" onclick={() => (showConnectionHelp = true)}><Plus size={16} /> Add connection</button>{/if}
   </header>
 
   <main class:has-connections={connections.length > 0}>
     {#if loading}
       <section class="empty-state" aria-labelledby="empty-title">
         <div class="empty-icon"><Database size={24} strokeWidth={1.7} /></div>
-        <span class="eyebrow">DATABASE WORKSPACE</span>
         <h1 id="empty-title">Loading connections.</h1>
         <p>Reading saved profiles from <code>connections.json</code>.</p>
       </section>
     {:else if error}
       <section class="empty-state" aria-labelledby="empty-title">
         <div class="empty-icon"><Database size={24} strokeWidth={1.7} /></div>
-        <span class="eyebrow">DATABASE WORKSPACE</span>
         <h1 id="empty-title">Could not load connections.</h1>
         <p>{error}</p>
         <button class="primary-button empty-action" onclick={() => void loadConnections()}>Try again</button>
@@ -104,14 +93,12 @@
     {:else if connections.length === 0}
       <section class="empty-state" aria-labelledby="empty-title">
         <div class="empty-icon"><Database size={24} strokeWidth={1.7} /></div>
-        <span class="eyebrow">A QUIETER WAY TO WORK WITH DATA</span>
         <h1 id="empty-title">Connect your first database.</h1>
-        <p>Add a database profile to <code>connections.json</code> to get started.</p>
         {@render connectionInstructions()}
       </section>
     {:else}
       <section class="connections-view" aria-labelledby="connections-title">
-        <div class="page-heading"><div><span class="eyebrow">YOUR WORKSPACE</span><h1 id="connections-title">Connections <span>{connections.length.toString().padStart(2, '0')}</span></h1></div><p>Database details at a glance.</p></div>
+        <div class="page-heading"><h1 id="connections-title">Connections</h1></div>
         <div class="connection-list">
           {#each connections as connection (connection.id)}
             <article class="connection-card">
@@ -129,17 +116,7 @@
             </article>
           {/each}
         </div>
-        <p class="list-footnote"><LockKeyhole size={13} /> Profiles are read from the local connections.json file.</p>
       </section>
     {/if}
   </main>
 </div>
-
-{#if showConnectionHelp}
-  <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) closeHelp(); }}>
-    <div class="connection-modal config-help" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
-      <div class="modal-top"><span class="modal-brand-mark"><FileText size={18} /></span><button class="close-button" aria-label="Close dialog" onclick={closeHelp}><X size={17} /></button></div>
-      {@render connectionInstructions()}
-    </div>
-  </div>
-{/if}
