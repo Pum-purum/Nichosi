@@ -8,8 +8,11 @@ services:
     environment:
       NICHOSI_ADDR: 0.0.0.0:8080
       NICHOSI_ADMIN_TOKEN: ${NICHOSI_ADMIN_TOKEN:?Set NICHOSI_ADMIN_TOKEN in .env}
+      NICHOSI_CONNECTIONS_FILE: /config/connections.json
     ports:
       - "127.0.0.1:8080:8080"
+    volumes:
+      - ../connections.json:/config/connections.json:ro
     depends_on:
       mysql:
         condition: service_healthy

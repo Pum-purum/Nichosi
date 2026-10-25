@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -23,6 +24,21 @@ import (
 type profile struct {
 	Connection
 	pool *sql.DB
+}
+
+type connectionsConfig struct {
+	Connections []connectionConfig `json:"connections"`
+}
+
+type connectionConfig struct {
+	Name        string `json:"name"`
+	Driver      string `json:"driver"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	User        string `json:"user"`
+	Database    string `json:"database"`
+	Environment string `json:"environment"`
+	Password    string `json:"password"`
 }
 
 type app struct {
@@ -46,6 +62,7 @@ func main() {
 		os.Exit(1)
 	}
 	application := &app{token: token, static: http.FileServer(http.FS(static))}
+	application.loadConfiguredConnections()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -96,6 +113,61 @@ func (a *app) createConnection(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_connection", "Provide valid MySQL connection details")
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+	item, err := a.openMySQLConnection(ctx, input)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "connection_failed", "Could not connect or read database metadata. Check the connection details.")
+		return
+	}
+	a.mu.Lock()
+	a.connections = append(a.connections, item)
+	a.mu.Unlock()
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (a *app) loadConfiguredConnections() {
+	configPath := os.Getenv("NICHOSI_CONNECTIONS_FILE")
+	if configPath == "" {
+		return
+	}
+	file, err := os.Open(configPath)
+	if err != nil {
+		slog.Warn("could not open connections config", "path", configPath)
+		return
+	}
+	defer file.Close()
+	var config connectionsConfig
+	if err := json.NewDecoder(io.LimitReader(file, 1<<20)).Decode(&config); err != nil {
+		slog.Warn("could not parse connections config", "path", configPath)
+		return
+	}
+	for _, saved := range config.Connections {
+		if saved.Driver != "mysql" || saved.Name == "" || saved.Host == "" || saved.Port < 1 || saved.Port > 65535 || saved.User == "" || saved.Database == "" || saved.Password == "" {
+			slog.Warn("skipping invalid connection profile", "name", saved.Name)
+			continue
+		}
+		environment := Environment(saved.Environment)
+		if environment != Environment("stage") && environment != Environment("prod") {
+			environment = Environment("dev")
+		}
+		input := ConnectionInput{
+			Name: saved.Name, Driver: ConnectionInputDriver(saved.Driver), Host: saved.Host,
+			Port: saved.Port, User: saved.User, Password: &saved.Password,
+			Database: saved.Database, Environment: environment,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		item, err := a.openMySQLConnection(ctx, input)
+		cancel()
+		if err != nil {
+			slog.Warn("configured database connection is unavailable", "name", saved.Name)
+			continue
+		}
+		a.connections = append(a.connections, item)
+	}
+}
+
+func (a *app) openMySQLConnection(ctx context.Context, input ConnectionInput) (*profile, error) {
 	cfg := mysql.NewConfig()
 	cfg.User, cfg.Passwd = input.User, *input.Password
 	cfg.Net, cfg.Addr, cfg.DBName = "tcp", net.JoinHostPort(input.Host, strconv.Itoa(input.Port)), input.Database
@@ -103,23 +175,18 @@ func (a *app) createConnection(w http.ResponseWriter, r *http.Request) {
 	cfg.ParseTime = true
 	pool, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "connection_failed", "Could not configure the database connection")
-		return
+		return nil, fmt.Errorf("configure MySQL connection: %w", err)
 	}
 	pool.SetMaxOpenConns(5)
 	pool.SetMaxIdleConns(2)
-	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
-	defer cancel()
 	if err := pool.PingContext(ctx); err != nil {
 		pool.Close()
-		writeError(w, http.StatusBadGateway, "connection_failed", "Could not connect. Check the host, port, database and credentials.")
-		return
+		return nil, fmt.Errorf("ping MySQL: %w", err)
 	}
 	var size int64
 	if err := pool.QueryRowContext(ctx, "SELECT COALESCE(SUM(data_length + index_length), 0) FROM information_schema.tables WHERE table_schema = ?", input.Database).Scan(&size); err != nil {
 		pool.Close()
-		writeError(w, http.StatusBadGateway, "metadata_failed", "Connected, but could not read database metadata")
-		return
+		return nil, fmt.Errorf("read MySQL database size: %w", err)
 	}
 	now := time.Now().UTC()
 	name := strings.TrimSpace(input.Name)
@@ -130,11 +197,7 @@ func (a *app) createConnection(w http.ResponseWriter, r *http.Request) {
 	if environment != Environment("stage") && environment != Environment("prod") {
 		environment = Environment("dev")
 	}
-	item := &profile{Connection: Connection{Id: fmt.Sprintf("conn-%d", now.UnixNano()), Name: name, Driver: ConnectionDriver("mysql"), Host: input.Host, Port: input.Port, User: input.User, Database: input.Database, Environment: environment, ReadOnly: environment == Environment("prod"), DatabaseSizeBytes: &size, LastConnectedAt: &now}, pool: pool}
-	a.mu.Lock()
-	a.connections = append(a.connections, item)
-	a.mu.Unlock()
-	writeJSON(w, http.StatusCreated, item)
+	return &profile{Connection: Connection{Id: fmt.Sprintf("conn-%d", now.UnixNano()), Name: name, Driver: ConnectionDriver("mysql"), Host: input.Host, Port: input.Port, User: input.User, Database: input.Database, Environment: environment, ReadOnly: environment == Environment("prod"), DatabaseSizeBytes: &size, LastConnectedAt: &now}, pool: pool}, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

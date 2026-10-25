@@ -5,6 +5,7 @@ help:
 > @grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*##/ -/'
 
 db-up: ## build and start Nichosi and test MySQL on loopback ports
+> test -f connections.json || cp connections.example.json connections.json
 > docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 
 db-down: ## stop Nichosi and test MySQL, preserving database data

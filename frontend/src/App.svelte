@@ -1,22 +1,14 @@
 <script lang="ts">
-  import { ArrowRight, Check, Clock, Database, HardDrive, LockKeyhole, Plus, Server, ShieldCheck, UserRound, X } from '@lucide/svelte';
+  import { ArrowRight, Clock, Database, FileText, HardDrive, LockKeyhole, Plus, Server, ShieldCheck, UserRound, X } from '@lucide/svelte';
   import type { components } from './lib/api/schema';
 
   type Connection = components['schemas']['Connection'];
-  type ConnectionInput = components['schemas']['ConnectionInput'];
 
   let adminToken = $state('');
   let tokenDraft = $state('');
   let showTokenForm = $state(true);
-  let showConnectionModal = $state(false);
-  let connectionName = $state('');
-  let host = $state('mysql');
-  let port = $state('3306');
-  let database = $state('bitrix_test');
-  let username = $state('nichosi');
-  let password = $state('');
+  let showConnectionHelp = $state(false);
   let connections = $state<Connection[]>([]);
-  let notice = $state('');
   let error = $state('');
   let busy = $state(false);
 
@@ -46,32 +38,8 @@
     } finally { busy = false; }
   }
 
-  async function saveConnection(event: SubmitEvent) {
-    event.preventDefault();
-    busy = true;
-    error = '';
-    try {
-      const payload: ConnectionInput = {
-        name: connectionName.trim(), driver: 'mysql', host: host.trim(), port: Number(port),
-        user: username.trim(), password, database: database.trim(), environment: 'dev',
-      };
-      const created = await request<Connection>('/api/connections', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      connections = [...connections, created];
-      showConnectionModal = false;
-      password = '';
-      connectionName = '';
-      notice = 'Connected. Credentials are held in memory until the container restarts.';
-      window.setTimeout(() => (notice = ''), 5000);
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Could not connect';
-    } finally { busy = false; }
-  }
-
-  function closeModal() { showConnectionModal = false; error = ''; password = ''; }
-  function handleWindowKeydown(event: KeyboardEvent) { if (event.key === 'Escape') closeModal(); }
+  function closeHelp() { showConnectionHelp = false; }
+  function handleWindowKeydown(event: KeyboardEvent) { if (event.key === 'Escape') closeHelp(); }
   function formatBytes(bytes: number | null) {
     if (bytes === null) return 'Unavailable';
     if (bytes < 1024) return `${bytes} B`;
@@ -84,7 +52,32 @@
   function formatDate(value: string | null) {
     return value ? new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : 'Unavailable';
   }
+
 </script>
+
+{#snippet connectionInstructions()}
+  <div class="config-instructions">
+    <div class="config-instructions-heading"><FileText size={17} /><div><span class="modal-eyebrow">CONNECTION PROFILES</span><h2 id="modal-title">Edit connections.json</h2></div></div>
+    <p class="config-description">Open this file in the project folder and edit its <code>connections</code> array.</p>
+    <ol class="config-steps">
+      <li><span>01</span><p>The test profile is already there. Replace its empty <code>password</code> value, or add another object to the array.</p></li>
+      <li><span>02</span><p>Enter the password directly in the <code>password</code> field. This local file is excluded from Git and the Docker image.</p></li>
+      <li><span>03</span><p>Save the file, then restart Nichosi to load the profile.</p></li>
+    </ol>
+    <pre class="config-example"><code>{`{
+  "name": "My database",
+  "driver": "mysql",
+  "host": "mysql",
+  "port": 3306,
+  "user": "database_user",
+  "database": "database_name",
+  "environment": "dev",
+  "password": "paste-password-here"
+}`}</code></pre>
+    <div class="config-restart"><span>RESTART COMMAND</span><code>docker compose --env-file .env -f deploy/docker-compose.yml restart nichosi</code></div>
+    <div class="config-footnote"><LockKeyhole size={12} /> The file is mounted read-only inside the app container.</div>
+  </div>
+{/snippet}
 
 <svelte:window onkeydown={handleWindowKeydown} />
 <svelte:head><title>Databases · Nichosi</title></svelte:head>
@@ -93,7 +86,7 @@
   <header class="topbar">
     <a class="brand" href="#home" aria-label="Nichosi home"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span class="brand-name">nichosi<span>.</span></span></a>
     <span class="workspace-label">DATABASE WORKSPACE</span>
-    {#if !showTokenForm && connections.length > 0}<button class="primary-button header-action" onclick={() => (showConnectionModal = true)}><Plus size={16} /> Add connection</button>{/if}
+    {#if !showTokenForm && connections.length > 0}<button class="primary-button header-action" onclick={() => (showConnectionHelp = true)}><Plus size={16} /> Add connection</button>{/if}
   </header>
 
   <main class:has-connections={connections.length > 0}>
@@ -115,10 +108,8 @@
         <div class="empty-icon"><Database size={24} strokeWidth={1.7} /></div>
         <span class="eyebrow">A QUIETER WAY TO WORK WITH DATA</span>
         <h1 id="empty-title">Connect your first database.</h1>
-        <p>Connect to a MySQL or MariaDB database and keep its details in one clear workspace.</p>
-        <button class="primary-button empty-action" onclick={() => (showConnectionModal = true)}><Plus size={17} /> Connect to a database</button>
-        <div class="driver-list"><span class="driver-list-label">MYSQL</span><span class="driver-separator"></span><span class="driver-list-label">MARIADB</span></div>
-        <div class="preview-note"><LockKeyhole size={13} /> Passwords stay in memory and are cleared when Nichosi restarts.</div>
+        <p>Add a database profile to <code>connections.json</code> to get started.</p>
+        {@render connectionInstructions()}
       </section>
     {:else}
       <section class="connections-view" aria-labelledby="connections-title">
@@ -140,28 +131,17 @@
             </article>
           {/each}
         </div>
-        <p class="list-footnote"><LockKeyhole size={13} /> Connection passwords remain in memory only for this container session.</p>
+        <p class="list-footnote"><LockKeyhole size={13} /> Profiles are read from the local connections.json file.</p>
       </section>
     {/if}
   </main>
 </div>
 
-{#if showConnectionModal}
-  <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) closeModal(); }}>
-    <div class="connection-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
-      <div class="modal-top"><span class="modal-brand-mark"><Database size={18} /></span><button class="close-button" aria-label="Close dialog" onclick={closeModal}><X size={17} /></button></div>
-      <div class="modal-intro"><span class="modal-eyebrow">NEW CONNECTION</span><h2 id="modal-title">Connect a database.</h2><p>Credentials are used to connect and held in memory for this session.</p></div>
-      <form onsubmit={saveConnection}>
-        <label class="field-label">Connection name <span>OPTIONAL</span><input bind:value={connectionName} placeholder="e.g. Local development" /></label>
-        <div class="field-pair"><label class="field-label">Host<input bind:value={host} placeholder="mysql" required /></label><label class="field-label">Port<input bind:value={port} inputmode="numeric" placeholder="3306" required /></label></div>
-        <label class="field-label">Database name<input bind:value={database} placeholder="bitrix_test" required /></label>
-        <div class="field-pair"><label class="field-label">Username<input bind:value={username} autocomplete="username" placeholder="Database user" required /></label><label class="field-label">Password<input bind:value={password} type="password" autocomplete="current-password" placeholder="Database password" required /></label></div>
-        {#if error}<p class="error-message">{error}</p>{/if}
-        <div class="modal-actions"><button type="button" class="cancel-button" onclick={closeModal}>Cancel</button><button type="submit" class="primary-button modal-submit" disabled={busy}>{busy ? 'Connecting…' : 'Connect'} <ArrowRight size={14} /></button></div>
-      </form>
-      <div class="modal-footnote"><LockKeyhole size={12} /> The password is never returned by the API.</div>
+{#if showConnectionHelp}
+  <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) closeHelp(); }}>
+    <div class="connection-modal config-help" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+      <div class="modal-top"><span class="modal-brand-mark"><FileText size={18} /></span><button class="close-button" aria-label="Close dialog" onclick={closeHelp}><X size={17} /></button></div>
+      {@render connectionInstructions()}
     </div>
   </div>
 {/if}
-
-{#if notice}<div class="toast"><span><Check size={14} /></span>{notice}<button aria-label="Dismiss" onclick={() => (notice = '')}><X size={14} /></button></div>{/if}
