@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDownToLine, Braces, ChevronDown, ChevronRight, Clock, Code2, Columns3, Database, Eye, Filter, HardDrive, KeyRound, Maximize2, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Server, ShieldCheck, SlidersHorizontal, TableProperties, Trash2, UserRound, Zap } from '@lucide/svelte';
+  import { Braces, Clock, Code2, Columns3, Database, Eye, Filter, HardDrive, KeyRound, Pencil, Search, Server, ShieldCheck, SlidersHorizontal, TableProperties, Trash2, Unplug, UserRound, Zap } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import type { components } from './lib/api/schema';
 
@@ -83,6 +83,14 @@
     return type === 'table' ? tables.length : objects.filter((object) => object.type === type).length;
   }
 
+  function disconnect() {
+    selectedConnection = null;
+    selectedTable = '';
+    selectedObject = null;
+    rowsPage = null;
+    error = '';
+  }
+
   onMount(() => { void loadConnections(); });
 
   function formatBytes(bytes: number | null) {
@@ -124,15 +132,6 @@
 <svelte:head><title>Databases · Nichosi</title></svelte:head>
 
 <div class="app-shell">
-  <header class="topbar">
-    <a class="brand" href="#home" aria-label="Nichosi home"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>{#if !selectedConnection}<span class="brand-name">nichosi<span>.</span></span>{/if}</a>
-    {#if selectedConnection}
-      <label class="global-search"><Search size={17} /><input placeholder="Search rows…" aria-label="Search rows" /></label>
-      <div class="topbar-breadcrumbs"><button onclick={() => selectedConnection = null}>{selectedConnection.name}</button><ChevronRight size={15} /><span>{selectedConnection.database}</span><ChevronRight size={15} /><span>{objectSections.find((section) => section.type === activeObjectType)?.label}</span>{#if selectedObject}<ChevronRight size={15} /><strong>{selectedObject.name}</strong>{:else if selectedTable}<ChevronRight size={15} /><strong>{selectedTable}</strong>{/if}<ChevronDown size={14} /></div>
-      <div class="topbar-tools"><span class="prototype-tag"><span></span> Preview</span><button class="tool-button" aria-label="Refresh"><RefreshCw size={17} /></button><button class="tool-button" aria-label="Expand"><Maximize2 size={17} /></button><button class="tool-button" aria-label="Add row" disabled><Plus size={18} /></button><button class="tool-button edit-tool" aria-label="Edit row"><Pencil size={17} /></button><button class="tool-button delete-tool" aria-label="Delete row"><Trash2 size={17} /></button><button class="tool-button" aria-label="Export"><ArrowDownToLine size={17} /></button></div>
-    {/if}
-  </header>
-
   <main class:has-connections={connections.length > 0} class:database-open={selectedConnection !== null}>
     {#if selectedConnection}
       <section class="database-workspace" aria-label="Database tables">
@@ -166,7 +165,11 @@
               {#if sectionCount(activeObjectType) === 0}<p class="object-list-empty">No {objectSections.find((section) => section.type === activeObjectType)?.label.toLowerCase()} found.</p>{/if}
             </nav>
           </div>
-          <div class="sidebar-footer"><span class="connection-dot"></span><span>Connected</span><span class="sidebar-footer-host">{selectedConnection.host}:{selectedConnection.port}</span></div>
+          <div class="sidebar-footer">
+            <button class="connection-status" onclick={disconnect} aria-label={`Disconnect from ${selectedConnection.name}`} title="Disconnect">
+              <span class="connection-dot"></span><span>Connected</span><span class="sidebar-footer-host">{selectedConnection.host}:{selectedConnection.port}</span><Unplug size={15} />
+            </button>
+          </div>
         </aside>
 
         {#if activeObjectType === 'table'}
