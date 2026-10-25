@@ -288,6 +288,7 @@ export interface components {
             columns: components["schemas"]["Column"][];
             /** @description Row values in column order. JSON null is SQL NULL. */
             rows: unknown[][];
+        totalRows: number;
             nextCursor?: string | null;
             editable: boolean;
             readOnlyReason?: string | null;

@@ -221,9 +221,12 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .page-size-label select { height: 34px; padding: 0 9px; border: 1px solid #45494b; border-radius: 6px; color: #d4d6d4; background: #222426; }
 .grid-summary { margin-left: auto; color: #9fa4a1; white-space: nowrap; }
 .pagination { gap: 3px; margin: 0 0 0 12px; }
-.pagination button { width: 34px; height: 34px; border-color: #404446; border-radius: 7px; color: #c5c8c5; background: #242627; font-size: 15px; }
+.pagination button { min-width: 38px; width: auto; height: 30px; padding: 0 8px; border-color: #404446; border-radius: 7px; color: #c5c8c5; background: #242627; font-size: 12px; }
 .pagination button:disabled { color: #777c79; }
 .pagination > span { padding: 0 7px; color: #d7d9d7; white-space: nowrap; }
+.pagination > button.active { border-color: #83c96f; color: #101410; background: #83c96f; }
+.pagination > button.active:disabled { border-color: #83c96f; color: #101410; background: #83c96f; opacity: 1; }
+.pagination .pagination-ellipsis { padding: 0 4px; color: #8f9692; }
 .grid-empty { margin: 26px; color: #aeb3af; font-size: 13px; }
 .object-main { display: flex; width: 100%; min-width: 0; min-height: 0; height: 100%; flex: 1; padding: 0 16px; }
 .object-detail-card { width: 100%; min-width: 0; padding: 28px; border: 1px solid #3c4142; border-radius: 10px; background: #2b2e2f; }

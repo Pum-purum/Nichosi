@@ -32,9 +32,32 @@
   let tables = $state<TableInfo[]>([]);
   let objects = $state<components['schemas']['DatabaseObject'][]>([]);
   let rowsPage = $state<RowsPage | null>(null);
+  let currentPage = $state(1);
+  let pageSize = $state(50);
   let databaseLoading = $state(false);
   let rowsLoading = $state(false);
   let rowsRequestId = 0;
+  let totalPages = $derived(Math.max(1, Math.ceil((rowsPage?.totalRows ?? 0) / pageSize)));
+  let pagedRows = $derived(rowsPage?.rows ?? []);
+  let pageItems = $derived.by(() => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1);
+    const middle = Math.ceil(totalPages / 2);
+    const pages = new Set<number>();
+    const add = (page: number) => {
+      if (pages.size < 5 && page >= 1 && page <= totalPages) pages.add(page);
+    };
+
+    add(currentPage);
+    add(currentPage - 1);
+    add(currentPage + 1);
+    add(1);
+    add(totalPages);
+    if (currentPage <= 3 || currentPage >= totalPages - 2) add(middle);
+    add(2);
+    add(totalPages - 1);
+    add(middle);
+    return [...pages].sort((a, b) => a - b);
+  });
 
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -74,13 +97,13 @@
     finally { databaseLoading = false; }
   }
 
-  async function selectTable(name: string) {
+  async function selectTable(name: string, page = 1) {
     if (!selectedConnection) return;
     const requestId = ++rowsRequestId;
-    activeObjectType = 'table'; selectedObject = null; selectedTable = name; error = ''; rowsLoading = true;
+    activeObjectType = 'table'; selectedObject = null; selectedTable = name; error = ''; rowsLoading = true; currentPage = page;
     try {
-      const page = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/tables/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: 200 }) });
-      if (requestId === rowsRequestId) rowsPage = page;
+      const result = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/tables/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: pageSize, offset: (page - 1) * pageSize }) });
+      if (requestId === rowsRequestId) rowsPage = result;
     } catch (cause) {
       if (requestId === rowsRequestId) { error = cause instanceof Error ? cause.message : 'Could not read table rows'; rowsPage = null; }
     } finally {
@@ -201,8 +224,8 @@
         {#if activeObjectType === 'table'}
           <div class="table-main">
             <div class="table-toolbar"><span class="read-only-note"><ShieldCheck size={14} /> {selectedConnection.readOnly ? 'Read only · Production' : 'Read only preview'}</span><span class="toolbar-spacer"></span><label class="data-filter"><Search size={16} /><input placeholder="Filter rows…" aria-label="Filter rows" /></label><button class="toolbar-control"><SlidersHorizontal size={16} /> Filter</button><button class="icon-button" aria-label="Column visibility"><Columns3 size={18} /></button></div>
-            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<p>{error}</p>{:else if rowsPage}<table class="data-grid"><thead><tr><th class="actions-head">Actions</th><th class="row-index-head">#</th>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}</tr></thead><tbody>{#each rowsPage.rows as row, rowIndex}<tr><td class="row-actions"><button aria-label="Edit row"><Pencil size={16} /></button><button aria-label="Delete row"><Trash2 size={16} /></button></td><td class="row-index">{rowIndex + 1}</td>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}</tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || rowsLoading}<div class="grid-loading" role="status" transition:fade={{ duration: 140 }}><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
-            <footer class="grid-footer"><span>Showing <strong>{rowsPage?.rows.length ?? 0} of {tables.find((table) => table.name === selectedTable)?.rowsEstimate ?? 0} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page"><option>50</option><option>100</option><option>200</option></select></label><span class="grid-summary">Rows: <strong>{rowsPage?.rows.length ?? 0}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination"><button disabled aria-label="First page">«</button><button disabled aria-label="Previous page">‹</button><span>Page 1 of 1</span><button disabled aria-label="Next page">›</button><button disabled aria-label="Last page">»</button></span></footer>
+            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<p>{error}</p>{:else if rowsPage}<table class="data-grid"><thead><tr><th class="actions-head">Actions</th><th class="row-index-head">#</th>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}</tr></thead><tbody>{#each pagedRows as row, rowIndex}<tr><td class="row-actions"><button aria-label="Edit row"><Pencil size={16} /></button><button aria-label="Delete row"><Trash2 size={16} /></button></td><td class="row-index">{(currentPage - 1) * pageSize + rowIndex + 1}</td>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}</tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || rowsLoading}<div class="grid-loading" role="status" transition:fade={{ duration: 140 }}><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
+            <footer class="grid-footer"><span>Showing <strong>{rowsPage && rowsPage.totalRows > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, rowsPage.totalRows)} of ${rowsPage.totalRows}` : '0 of 0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page" bind:value={pageSize} onchange={() => void selectTable(selectedTable, 1)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><span class="grid-summary">Rows: <strong>{pagedRows.length}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination"><button disabled={currentPage === 1 || rowsLoading} onclick={() => void selectTable(selectedTable, currentPage - 1)} aria-label="Previous page">‹</button>{#each pageItems as page, index}{#if index > 0 && page > pageItems[index - 1] + 1}<span class="pagination-ellipsis">…</span>{/if}<button class:active={currentPage === page} disabled={rowsLoading || currentPage === page} onclick={() => void selectTable(selectedTable, page)} aria-label={`Page ${page}`}>{page}</button>{/each}<button disabled={currentPage === totalPages || rowsLoading} onclick={() => void selectTable(selectedTable, currentPage + 1)} aria-label="Next page">›</button></span></footer>
           </div>
         {:else}
           <section class="object-main" aria-label={`${objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'} details`}>

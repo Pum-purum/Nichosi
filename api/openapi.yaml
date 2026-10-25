@@ -296,9 +296,10 @@ components:
           items: { $ref: "#/components/schemas/OrderBy" }
         cursor: { type: string, nullable: true }
         limit: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+        offset: { type: integer, minimum: 0, default: 0 }
     RowsPage:
       type: object
-      required: [columns, rows, editable]
+      required: [columns, rows, editable, totalRows]
       properties:
         columns:
           type: array
@@ -311,6 +312,7 @@ components:
             items: {}
         nextCursor: { type: string, nullable: true }
         editable: { type: boolean }
+        totalRows: { type: integer, format: int64 }
         readOnlyReason: { type: string, nullable: true }
     Change:
       type: object

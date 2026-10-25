@@ -301,6 +301,10 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	if limit > 1000 {
 		limit = 1000
 	}
+	offset := 0
+	if query.Offset != nil && *query.Offset > 0 {
+		offset = *query.Offset
+	}
 	cols, err := item.pool.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", item.Database, table)
 	if err != nil {
 		writeError(w, 502, "metadata_failed", "Could not read table columns")
@@ -308,6 +312,10 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cols.Close()
 	page := RowsPage{Columns: []Column{}, Rows: [][]interface{}{}, Editable: false}
+	if err := item.pool.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+quoteMySQLIdent(table)).Scan(&page.TotalRows); err != nil {
+		writeError(w, 502, "count_failed", "Could not count table rows")
+		return
+	}
 	names := []string{}
 	for cols.Next() {
 		var c Column
@@ -328,7 +336,7 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	for i, n := range names {
 		selects[i] = quoteMySQLIdent(n)
 	}
-	result, err := item.pool.QueryContext(ctx, "SELECT "+strings.Join(selects, ",")+" FROM "+quoteMySQLIdent(table)+" LIMIT ?", limit)
+	result, err := item.pool.QueryContext(ctx, "SELECT "+strings.Join(selects, ",")+" FROM "+quoteMySQLIdent(table)+" LIMIT ? OFFSET ?", limit, offset)
 	if err != nil {
 		writeError(w, 502, "query_failed", "Could not read table rows")
 		return

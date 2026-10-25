@@ -231,6 +231,7 @@ type RowsPage struct {
 
 	// Rows Row values in column order. JSON null is SQL NULL.
 	Rows [][]interface{} `json:"rows"`
+	TotalRows int64 `json:"totalRows"`
 }
 
 // RowsQuery defines model for RowsQuery.
@@ -238,6 +239,7 @@ type RowsQuery struct {
 	Cursor  *string    `json:"cursor"`
 	Filters *[]Filter  `json:"filters,omitempty"`
 	Limit   *int       `json:"limit,omitempty"`
+	Offset  *int       `json:"offset,omitempty"`
 	OrderBy *[]OrderBy `json:"orderBy,omitempty"`
 }
 
