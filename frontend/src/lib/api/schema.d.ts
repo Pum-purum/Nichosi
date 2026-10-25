@@ -208,10 +208,19 @@ export interface components {
             name: string;
             /** Format: int64 */
             rowsEstimate: number;
+            /** Estimated table data size in bytes */
+            dataBytes: number;
+            /** Estimated table index size in bytes */
+            indexBytes: number;
             columns: components["schemas"]["Column"][];
         };
         Schema: {
             tables: components["schemas"]["TableInfo"][];
+            objects: components["schemas"]["DatabaseObject"][];
+        };
+        DatabaseObject: {
+            name: string;
+            type: "view" | "trigger" | "procedure" | "function" | "event";
         };
         Filter: {
             column: string;

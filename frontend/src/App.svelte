@@ -4,6 +4,8 @@
   import type { components } from './lib/api/schema';
 
   type Connection = components['schemas']['Connection'];
+  type TableInfo = components['schemas']['TableInfo'];
+  type RowsPage = components['schemas']['RowsPage'];
 
   let connections = $state<Connection[]>([]);
   let error = $state('');
@@ -11,35 +13,11 @@
   let selectedConnection = $state<Connection | null>(null);
   let selectedTable = $state('customers');
   let tableSearch = $state('');
+  let tables = $state<TableInfo[]>([]);
+  let objects = $state<components['schemas']['DatabaseObject'][]>([]);
+  let rowsPage = $state<RowsPage | null>(null);
+  let databaseLoading = $state(false);
 
-  const sampleTables = [
-    { name: 'customers', rows: '12,480', columns: 8, updated: '2 min ago' },
-    { name: 'orders', rows: '38,216', columns: 11, updated: '5 min ago' },
-    { name: 'order_items', rows: '96,503', columns: 6, updated: '5 min ago' },
-    { name: 'products', rows: '1,284', columns: 9, updated: 'Yesterday' },
-    { name: 'categories', rows: '42', columns: 4, updated: 'Yesterday' },
-    { name: 'payments', rows: '21,873', columns: 7, updated: '12 min ago' },
-    { name: 'addresses', rows: '14,091', columns: 6, updated: '1 hour ago' },
-    { name: 'audit_log', rows: '204,118', columns: 5, updated: 'Just now' },
-  ];
-  const sampleColumns = [
-    { name: 'id', type: 'int', key: true },
-    { name: 'full_name', type: 'varchar(120)', key: false },
-    { name: 'email', type: 'varchar(160)', key: false },
-    { name: 'company', type: 'varchar(120)', key: false },
-    { name: 'status', type: 'enum', key: false },
-    { name: 'created_at', type: 'datetime', key: false },
-  ];
-  const sampleRows = [
-    ['1042', 'Maya Chen', 'maya.chen@northstar.io', 'Northstar Labs', 'active', '2025-03-18 09:42:16'],
-    ['1041', 'Theo Martin', 'theo.martin@hey.com', '—', 'active', '2025-03-18 09:31:08'],
-    ['1040', 'Amara Okafor', 'amara@fieldwork.co', 'Fieldwork', 'pending', '2025-03-18 09:14:52'],
-    ['1039', 'Luca Rossi', 'luca.rossi@studio.it', 'Studio Rossi', 'active', '2025-03-18 08:56:33'],
-    ['1038', 'Nina Patel', 'nina.patel@evergreen.dev', 'Evergreen', 'inactive', '2025-03-18 08:42:11'],
-    ['1037', 'Jonas Berg', 'jonas@berg.design', '—', 'active', '2025-03-18 08:20:04'],
-    ['1036', 'Sofia Alvarez', 'sofia@luz.mx', 'Luz Creative', 'active', '2025-03-18 08:03:47'],
-    ['1035', 'Elliot Brooks', 'elliot.brooks@hey.com', '—', 'pending', '2025-03-18 07:51:29'],
-  ];
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetch(path, {
@@ -61,6 +39,23 @@
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Could not load connections';
     } finally { loading = false; }
+  }
+
+  async function openDatabase(connection: Connection) {
+    selectedConnection = connection; selectedTable = ''; rowsPage = null; tables = []; objects = []; error = ''; databaseLoading = true;
+    try {
+      const schema = await request<components['schemas']['Schema']>(`/api/connections/${encodeURIComponent(connection.id)}/schema`);
+      tables = schema.tables; objects = schema.objects;
+      if (tables.length) await selectTable(tables[0].name);
+    } catch (cause) { error = cause instanceof Error ? cause.message : 'Could not read database schema'; }
+    finally { databaseLoading = false; }
+  }
+
+  async function selectTable(name: string) {
+    if (!selectedConnection) return;
+    selectedTable = name; error = ''; rowsPage = null;
+    try { rowsPage = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/tables/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: 200 }) }); }
+    catch (cause) { error = cause instanceof Error ? cause.message : 'Could not read table rows'; rowsPage = null; }
   }
 
   onMount(() => { void loadConnections(); });
@@ -122,23 +117,27 @@
           <button class="tree-root"><ChevronDown size={15} /><Database size={18} /><span>{selectedConnection.name}</span></button>
           <div class="tree-branch"><button class="tree-database"><ChevronDown size={15} /><Database size={18} /><span>{selectedConnection.database}</span></button>
             <button class="tree-group"><ChevronRight size={15} /><span>pg_toast</span><small>(0)</small></button>
-            <button class="tree-group expanded"><ChevronDown size={15} /><span>public</span><small>({sampleTables.length})</small></button>
+            <button class="tree-group expanded"><ChevronDown size={15} /><span>public</span><small>({tables.length})</small></button>
             <label class="table-search"><Search size={14} /><input bind:value={tableSearch} placeholder="Filter objects" aria-label="Filter tables" /></label>
             <nav class="table-nav" aria-label="Tables">
-              {#each sampleTables.filter((table) => table.name.includes(tableSearch.toLowerCase())) as table}
-                <button class:active={selectedTable === table.name} class="table-nav-item" onclick={() => selectedTable = table.name}>
-                  <TableProperties size={17} /><span>{table.name}</span>
+              {#each tables.filter((table) => table.name.toLowerCase().includes(tableSearch.toLowerCase())) as table}
+                <button class:active={selectedTable === table.name} class="table-nav-item" onclick={() => void selectTable(table.name)}>
+                  <TableProperties size={17} /><span>{table.name}</span><small>{formatBytes(table.dataBytes + table.indexBytes)}</small>
                 </button>
               {/each}
             </nav>
+            {#each ['view', 'trigger', 'procedure', 'function', 'event'] as objectType}
+              {@const group = objects.filter((object) => object.type === objectType)}
+              {#if group.length}<button class="tree-group"><ChevronRight size={15} /><span>{objectType}s</span><small>({group.length})</small></button>{/if}
+            {/each}
           </div>
           <div class="sidebar-footer"><span class="connection-dot"></span><span>Connected</span><span class="sidebar-footer-host">{selectedConnection.host}:{selectedConnection.port}</span></div>
         </aside>
 
         <div class="table-main">
           <div class="table-toolbar"><span class="read-only-note"><ShieldCheck size={14} /> {selectedConnection.readOnly ? 'Read only · Production' : 'Read only preview'}</span><span class="toolbar-spacer"></span><label class="data-filter"><Search size={16} /><input placeholder="Filter rows…" aria-label="Filter rows" /></label><button class="toolbar-control"><SlidersHorizontal size={16} /> Filter</button><button class="icon-button" aria-label="Column visibility"><Columns3 size={18} /></button></div>
-          <div class="data-grid-wrap"><table class="data-grid"><thead><tr><th class="actions-head">Actions</th><th class="row-index-head">#</th>{#each sampleColumns as column}<th><span class="column-name">{#if column.key}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.key}<em>PK</em>{/if}</small></th>{/each}</tr></thead><tbody>{#each sampleRows as row, rowIndex}<tr><td class="row-actions"><button aria-label="Edit row"><Pencil size={16} /></button><button aria-label="Delete row"><Trash2 size={16} /></button></td><td class="row-index">{rowIndex + 1}</td>{#each row as value, columnIndex}<td>{#if columnIndex === 4}<span class:status-active={value === 'active'} class:status-pending={value === 'pending'} class:status-inactive={value === 'inactive'} class="status-pill"><span></span>{value}</span>{:else}<span class:muted-value={value === '—'}>{value}</span>{/if}</td>{/each}</tr>{/each}</tbody></table></div>
-          <footer class="grid-footer"><span>Showing <strong>1–8 of {sampleTables.find((table) => table.name === selectedTable)?.rows ?? '0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page"><option>50</option><option>100</option><option>200</option></select></label><span class="grid-summary">Rows: <strong>{sampleRows.length}</strong> &nbsp; Columns: <strong>{sampleColumns.length}</strong></span><span class="pagination"><button disabled aria-label="First page">«</button><button disabled aria-label="Previous page">‹</button><span>Page 1 of 1</span><button disabled aria-label="Next page">›</button><button disabled aria-label="Last page">»</button></span></footer>
+          <div class="data-grid-wrap">{#if databaseLoading}<p>Loading database…</p>{:else if error}<p>{error}</p>{:else}<table class="data-grid"><thead><tr><th class="actions-head">Actions</th><th class="row-index-head">#</th>{#each (rowsPage?.columns ?? []) as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}</tr></thead><tbody>{#each (rowsPage?.rows ?? []) as row, rowIndex}<tr><td class="row-actions"><button aria-label="Edit row"><Pencil size={16} /></button><button aria-label="Delete row"><Trash2 size={16} /></button></td><td class="row-index">{rowIndex + 1}</td>{#each row as value, columnIndex}<td>{#if columnIndex === 4}<span class:status-active={value === 'active'} class:status-pending={value === 'pending'} class:status-inactive={value === 'inactive'} class="status-pill"><span></span>{value}</span>{:else}<span class:muted-value={value === '—'}>{value}</span>{/if}</td>{/each}</tr>{/each}</tbody></table>{/if}</div>
+          <footer class="grid-footer"><span>Showing <strong>1–8 of {tables.find((table) => table.name === selectedTable)?.rowsEstimate ?? 0} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page"><option>50</option><option>100</option><option>200</option></select></label><span class="grid-summary">Rows: <strong>{rowsPage?.rows.length ?? 0}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination"><button disabled aria-label="First page">«</button><button disabled aria-label="Previous page">‹</button><span>Page 1 of 1</span><button disabled aria-label="Next page">›</button><button disabled aria-label="Last page">»</button></span></footer>
         </div>
       </section>
     {:else if loading}
@@ -165,7 +164,7 @@
         <div class="page-heading"><h1 id="connections-title">Connections</h1></div>
         <div class="connection-list">
           {#each connections as connection (connection.id)}
-            <button class="connection-card" onclick={() => { selectedConnection = connection; selectedTable = 'customers'; }} aria-label={`Open ${connection.name}`}>
+            <button class="connection-card" onclick={() => void openDatabase(connection)} aria-label={`Open ${connection.name}`}>
               <div class="connection-row">
                 <span class="connection-type" role="img" aria-label={connection.driver.toUpperCase()} title={connection.driver.toUpperCase()}><Database size={17} strokeWidth={1.8} /></span>
                 <span class="connection-name" title={connection.name}>{connection.name}</span>

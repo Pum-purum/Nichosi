@@ -70,6 +70,8 @@ func main() {
 	})
 	mux.Handle("GET /api/connections", application.authorize(http.HandlerFunc(application.listConnections)))
 	mux.Handle("POST /api/connections", application.authorize(http.HandlerFunc(application.createConnection)))
+	mux.Handle("GET /api/connections/{connId}/schema", application.authorize(http.HandlerFunc(application.getSchema)))
+	mux.Handle("POST /api/connections/{connId}/tables/{table}/rows", application.authorize(http.HandlerFunc(application.queryRows)))
 	mux.Handle("/", application.static)
 
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
@@ -126,6 +128,168 @@ func (a *app) createConnection(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 	writeJSON(w, http.StatusCreated, item)
 }
+
+func (a *app) connection(id string) *profile {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	for _, item := range a.connections {
+		if item.Id == id {
+			return item
+		}
+	}
+	return nil
+}
+
+func (a *app) getSchema(w http.ResponseWriter, r *http.Request) {
+	item := a.connection(r.PathValue("connId"))
+	if item == nil {
+		writeError(w, 404, "not_found", "Connection not found")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	rows, err := item.pool.QueryContext(ctx, "SELECT TABLE_NAME, COALESCE(TABLE_ROWS,0), COALESCE(DATA_LENGTH,0), COALESCE(INDEX_LENGTH,0) FROM information_schema.tables WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME", item.Database)
+	if err != nil {
+		writeError(w, 502, "metadata_failed", "Could not read database tables")
+		return
+	}
+	defer rows.Close()
+	schema := Schema{Tables: []TableInfo{}, Objects: []DatabaseObject{}}
+	for rows.Next() {
+		var table TableInfo
+		if err := rows.Scan(&table.Name, &table.RowsEstimate, &table.DataBytes, &table.IndexBytes); err != nil {
+			writeError(w, 502, "metadata_failed", "Could not read database tables")
+			return
+		}
+		table.Columns = []Column{}
+		schema.Tables = append(schema.Tables, table)
+	}
+	if rows.Err() != nil {
+		writeError(w, 502, "metadata_failed", "Could not read database tables")
+		return
+	}
+	for i := range schema.Tables {
+		columns, err := item.pool.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", item.Database, schema.Tables[i].Name)
+		if err != nil {
+			writeError(w, 502, "metadata_failed", "Could not read table columns")
+			return
+		}
+		for columns.Next() {
+			var c Column
+			var nullable, key string
+			if columns.Scan(&c.Name, &c.Type, &nullable, &key) == nil {
+				c.Nullable = nullable == "YES"
+				c.PrimaryKey = key == "PRI"
+				schema.Tables[i].Columns = append(schema.Tables[i].Columns, c)
+			}
+		}
+		columns.Close()
+	}
+	objects, err := item.pool.QueryContext(ctx, "SELECT TABLE_NAME, 'view' FROM information_schema.views WHERE TABLE_SCHEMA = ? UNION ALL SELECT TRIGGER_NAME, 'trigger' FROM information_schema.triggers WHERE TRIGGER_SCHEMA = ? ORDER BY 2,1", item.Database, item.Database)
+	if err == nil {
+		defer objects.Close()
+		for objects.Next() {
+			var object DatabaseObject
+			if objects.Scan(&object.Name, &object.Type) == nil {
+				schema.Objects = append(schema.Objects, object)
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, schema)
+}
+
+func quoteMySQLIdent(name string) string { return "`" + strings.ReplaceAll(name, "`", "``") + "`" }
+
+func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
+	item := a.connection(r.PathValue("connId"))
+	if item == nil {
+		writeError(w, 404, "not_found", "Connection not found")
+		return
+	}
+	table := r.PathValue("table")
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	var exists int
+	if err := item.pool.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND TABLE_TYPE = 'BASE TABLE'", item.Database, table).Scan(&exists); err != nil || exists == 0 {
+		writeError(w, 404, "table_not_found", "Table not found")
+		return
+	}
+	var query RowsQuery
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := json.NewDecoder(r.Body).Decode(&query); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, 400, "invalid_request", "Invalid row query")
+		return
+	}
+	limit := 200
+	if query.Limit != nil {
+		limit = *query.Limit
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	cols, err := item.pool.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", item.Database, table)
+	if err != nil {
+		writeError(w, 502, "metadata_failed", "Could not read table columns")
+		return
+	}
+	defer cols.Close()
+	page := RowsPage{Columns: []Column{}, Rows: [][]interface{}{}, Editable: false}
+	names := []string{}
+	for cols.Next() {
+		var c Column
+		var nullable, key string
+		if cols.Scan(&c.Name, &c.Type, &nullable, &key) != nil {
+			continue
+		}
+		c.Nullable = nullable == "YES"
+		c.PrimaryKey = key == "PRI"
+		page.Columns = append(page.Columns, c)
+		names = append(names, c.Name)
+	}
+	if len(names) == 0 {
+		writeJSON(w, 200, page)
+		return
+	}
+	selects := make([]string, len(names))
+	for i, n := range names {
+		selects[i] = quoteMySQLIdent(n)
+	}
+	result, err := item.pool.QueryContext(ctx, "SELECT "+strings.Join(selects, ",")+" FROM "+quoteMySQLIdent(table)+" LIMIT ?", limit)
+	if err != nil {
+		writeError(w, 502, "query_failed", "Could not read table rows")
+		return
+	}
+	defer result.Close()
+	values := make([]interface{}, len(names))
+	dest := make([]interface{}, len(names))
+	for i := range values {
+		dest[i] = &values[i]
+	}
+	for result.Next() {
+		if err := result.Scan(dest...); err != nil {
+			writeError(w, 502, "query_failed", "Could not read table rows")
+			return
+		}
+		row := append([]interface{}(nil), values...)
+		for i, v := range row {
+			if b, ok := v.([]byte); ok {
+				row[i] = string(b)
+			}
+		}
+		page.Rows = append(page.Rows, row)
+	}
+	if result.Err() != nil {
+		writeError(w, 502, "query_failed", "Could not read table rows")
+		return
+	}
+	page.ReadOnlyReason = ptrString("Editing is not available yet")
+	writeJSON(w, 200, page)
+}
+
+func ptrString(value string) *string { return &value }
 
 func (a *app) loadConfiguredConnections() {
 	configPath := os.Getenv("NICHOSI_CONNECTIONS_FILE")

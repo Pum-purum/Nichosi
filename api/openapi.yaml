@@ -224,20 +224,31 @@ components:
           nullable: true
     TableInfo:
       type: object
-      required: [name, rowsEstimate, columns]
+      required: [name, rowsEstimate, dataBytes, indexBytes, columns]
       properties:
         name: { type: string }
         rowsEstimate: { type: integer, format: int64 }
+        dataBytes: { type: integer, format: int64, description: "Estimated table data size in bytes" }
+        indexBytes: { type: integer, format: int64, description: "Estimated table index size in bytes" }
         columns:
           type: array
           items: { $ref: "#/components/schemas/Column" }
     Schema:
       type: object
-      required: [tables]
+      required: [tables, objects]
       properties:
         tables:
           type: array
           items: { $ref: "#/components/schemas/TableInfo" }
+        objects:
+          type: array
+          items: { $ref: "#/components/schemas/DatabaseObject" }
+    DatabaseObject:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [view, trigger, procedure, function, event] }
     Filter:
       type: object
       required: [column, op]

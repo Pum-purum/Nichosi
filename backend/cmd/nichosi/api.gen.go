@@ -242,12 +242,20 @@ type RowsQuery struct {
 
 // Schema defines model for Schema.
 type Schema struct {
-	Tables []TableInfo `json:"tables"`
+	Tables  []TableInfo      `json:"tables"`
+	Objects []DatabaseObject `json:"objects"`
+}
+
+type DatabaseObject struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // TableInfo defines model for TableInfo.
 type TableInfo struct {
 	Columns      []Column `json:"columns"`
+	DataBytes    int64    `json:"dataBytes"`
+	IndexBytes   int64    `json:"indexBytes"`
 	Name         string   `json:"name"`
 	RowsEstimate int64    `json:"rowsEstimate"`
 }
