@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Braces, Clock, Code2, Columns3, Database, Eye, Filter, HardDrive, KeyRound, Pencil, Search, Server, ShieldCheck, SlidersHorizontal, TableProperties, Trash2, Unplug, UserRound, Zap } from '@lucide/svelte';
   import { onMount } from 'svelte';
-  import { fade } from 'svelte/transition';
   import CellValue from './lib/CellValue.svelte';
   import type { components } from './lib/api/schema';
 
@@ -36,6 +35,7 @@
   let pageSize = $state(50);
   let databaseLoading = $state(false);
   let rowsLoading = $state(false);
+  let pendingPageControl = $state<number | 'previous' | 'next' | null>(null);
   let rowsRequestId = 0;
   let totalPages = $derived(Math.max(1, Math.ceil((rowsPage?.totalRows ?? 0) / pageSize)));
   let pagedRows = $derived(rowsPage?.rows ?? []);
@@ -85,6 +85,7 @@
   async function openDatabase(connection: Connection) {
     rowsRequestId += 1;
     rowsLoading = false;
+    pendingPageControl = null;
     selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; rowsPage = null; tables = []; objects = []; error = ''; databaseLoading = true;
     try {
       const connected = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/connect`, { method: 'POST' });
@@ -97,17 +98,20 @@
     finally { databaseLoading = false; }
   }
 
-  async function selectTable(name: string, page = 1) {
+  async function selectTable(name: string, page = 1, control: number | 'previous' | 'next' | null = null) {
     if (!selectedConnection) return;
     const requestId = ++rowsRequestId;
-    activeObjectType = 'table'; selectedObject = null; selectedTable = name; error = ''; rowsLoading = true; currentPage = page;
+    const minimumLoadingTime = new Promise<void>((resolve) => setTimeout(resolve, 200));
+    activeObjectType = 'table'; selectedObject = null; selectedTable = name; error = ''; rowsLoading = true; pendingPageControl = control;
     try {
       const result = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/tables/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: pageSize, offset: (page - 1) * pageSize }) });
-      if (requestId === rowsRequestId) rowsPage = result;
+      await minimumLoadingTime;
+      if (requestId === rowsRequestId) { rowsPage = result; currentPage = page; }
     } catch (cause) {
+      await minimumLoadingTime;
       if (requestId === rowsRequestId) { error = cause instanceof Error ? cause.message : 'Could not read table rows'; rowsPage = null; }
     } finally {
-      if (requestId === rowsRequestId) rowsLoading = false;
+      if (requestId === rowsRequestId) { rowsLoading = false; pendingPageControl = null; }
     }
   }
 
@@ -126,6 +130,7 @@
     if (!selectedConnection) return;
     rowsRequestId += 1;
     rowsLoading = false;
+    pendingPageControl = null;
     try {
       const closed = await request<Connection>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/disconnect`, { method: 'POST' });
       connections = connections.map((item) => item.id === closed.id ? closed : item);
@@ -224,8 +229,8 @@
         {#if activeObjectType === 'table'}
           <div class="table-main">
             <div class="table-toolbar"><span class="read-only-note"><ShieldCheck size={14} /> {selectedConnection.readOnly ? 'Read only · Production' : 'Read only preview'}</span><span class="toolbar-spacer"></span><label class="data-filter"><Search size={16} /><input placeholder="Filter rows…" aria-label="Filter rows" /></label><button class="toolbar-control"><SlidersHorizontal size={16} /> Filter</button><button class="icon-button" aria-label="Column visibility"><Columns3 size={18} /></button></div>
-            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<p>{error}</p>{:else if rowsPage}<table class="data-grid"><thead><tr><th class="actions-head">Actions</th><th class="row-index-head">#</th>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}</tr></thead><tbody>{#each pagedRows as row, rowIndex}<tr><td class="row-actions"><button aria-label="Edit row"><Pencil size={16} /></button><button aria-label="Delete row"><Trash2 size={16} /></button></td><td class="row-index">{(currentPage - 1) * pageSize + rowIndex + 1}</td>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}</tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || rowsLoading}<div class="grid-loading" role="status" transition:fade={{ duration: 140 }}><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
-            <footer class="grid-footer"><span>Showing <strong>{rowsPage && rowsPage.totalRows > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, rowsPage.totalRows)} of ${rowsPage.totalRows}` : '0 of 0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page" bind:value={pageSize} onchange={() => void selectTable(selectedTable, 1)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><span class="grid-summary">Rows: <strong>{pagedRows.length}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination">{#if currentPage > 1}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage - 1)} aria-label="Previous page">‹</button>{/if}{#each pageItems as page, index}{#if index > 0 && page > pageItems[index - 1] + 1}<span class="pagination-ellipsis">…</span>{/if}{#if currentPage === page}<span class="active" aria-current="page" aria-label={`Page ${page}`}>{page}</span>{:else}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, page)} aria-label={`Page ${page}`}>{page}</button>{/if}{/each}{#if currentPage < totalPages}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage + 1)} aria-label="Next page">›</button>{/if}</span></footer>
+            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<p>{error}</p>{:else if rowsPage}<table class="data-grid"><thead><tr><th class="actions-head">Actions</th><th class="row-index-head">#</th>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}</tr></thead><tbody>{#each pagedRows as row, rowIndex}<tr><td class="row-actions"><button aria-label="Edit row"><Pencil size={16} /></button><button aria-label="Delete row"><Trash2 size={16} /></button></td><td class="row-index">{(currentPage - 1) * pageSize + rowIndex + 1}</td>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}</tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || (rowsLoading && pendingPageControl === null)}<div class="grid-loading" role="status"><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
+            <footer class="grid-footer"><span>Showing <strong>{rowsPage && rowsPage.totalRows > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, rowsPage.totalRows)} of ${rowsPage.totalRows}` : '0 of 0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page" disabled={rowsLoading || databaseLoading} bind:value={pageSize} onchange={() => void selectTable(selectedTable, 1)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><span class="grid-summary">Rows: <strong>{pagedRows.length}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination">{#if currentPage > 1}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage - 1, 'previous')} aria-label="Previous page" aria-busy={pendingPageControl === 'previous'}>{#if pendingPageControl === 'previous'}<span class="page-spinner" aria-hidden="true"></span>{:else}‹{/if}</button>{/if}{#each pageItems as page, index}{#if index > 0 && page > pageItems[index - 1] + 1}<span class="pagination-ellipsis">…</span>{/if}{#if currentPage === page}<span class="active" aria-current="page" aria-label={`Page ${page}`}>{page}</span>{:else}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, page, page)} aria-label={`Page ${page}`} aria-busy={pendingPageControl === page}>{#if pendingPageControl === page}<span class="page-spinner" aria-hidden="true"></span>{:else}{page}{/if}</button>{/if}{/each}{#if currentPage < totalPages}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage + 1, 'next')} aria-label="Next page" aria-busy={pendingPageControl === 'next'}>{#if pendingPageControl === 'next'}<span class="page-spinner" aria-hidden="true"></span>{:else}›{/if}</button>{/if}</span></footer>
           </div>
         {:else}
           <section class="object-main" aria-label={`${objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'} details`}>
