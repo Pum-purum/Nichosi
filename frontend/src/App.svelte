@@ -30,6 +30,7 @@
   let tableSearch = $state('');
   let tables = $state<TableInfo[]>([]);
   let objects = $state<components['schemas']['DatabaseObject'][]>([]);
+  let largestTableBytes = $derived(tables.reduce((largest, table) => Math.max(largest, table.dataBytes + table.indexBytes), 0));
   let rowsPage = $state<RowsPage | null>(null);
   let currentPage = $state(1);
   let pageSize = $state(50);
@@ -204,8 +205,11 @@
             <nav class="table-nav" aria-label={objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'}>
               {#if activeObjectType === 'table'}
                 {#each tables.filter((table) => table.name.toLowerCase().includes(tableSearch.toLowerCase())) as table}
-                  <button class:active={selectedTable === table.name} class="table-nav-item" aria-current={selectedTable === table.name ? 'page' : undefined} onclick={() => void selectTable(table.name)}>
-                    <TableProperties size={17} /><span>{table.name}</span><small>{formatBytes(table.dataBytes + table.indexBytes)}</small>
+                  <button class:active={selectedTable === table.name} class="table-nav-item table-with-size" aria-current={selectedTable === table.name ? 'page' : undefined} onclick={() => void selectTable(table.name)}>
+                    <TableProperties size={17} /><span>{table.name}</span><small class="table-size" title={`${formatBytes(table.dataBytes + table.indexBytes)} · ${largestTableBytes > 0 ? ((table.dataBytes + table.indexBytes) / largestTableBytes * 100).toFixed(1) : '0'}% of the largest table`}>
+                      <span>{formatBytes(table.dataBytes + table.indexBytes)}</span>
+                      <span class="table-size-track" aria-hidden="true"><span class="table-size-fill" style:width={`${largestTableBytes > 0 ? (table.dataBytes + table.indexBytes) / largestTableBytes * 100 : 0}%`}></span></span>
+                    </small>
                   </button>
                 {/each}
               {:else}

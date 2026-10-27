@@ -317,3 +317,9 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 
 .pagination button[aria-busy="true"] { color: var(--accent); border-color: var(--accent); }
 .page-spinner { display: inline-block; width: 14px; height: 14px; vertical-align: middle; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: grid-spin .75s linear infinite; }
+
+.table-nav-item.table-with-size { height: 42px; }
+.table-with-size > svg { flex-shrink: 0; }
+.table-nav-item > .table-size { display: flex; flex: 0 0 68px; flex-direction: column; gap: 5px; color: #aeb5af; text-align: right; }
+.table-size-track { display: block; height: 4px; overflow: hidden; border-radius: 2px; background: #414745; }
+.table-size-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
