@@ -192,7 +192,8 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .table-toolbar .data-filter input { font-size: 13px; }
 .table-toolbar .toolbar-control { min-height: 38px; padding: 0 12px; border-color: #3d4244; border-radius: 6px; color: #c9ccca; background: #25282a; font-size: 12px; }
 .table-toolbar .icon-button { width: 38px; height: 38px; border-radius: 7px; }
-.data-grid-wrap { position: relative; min-width: 0; min-height: 0; flex: 1; margin-top: 14px; border-color: #3a3d3f; border-radius: 9px 9px 0 0; background: #2c2d2e; box-shadow: none; overscroll-behavior: contain; overflow: auto; }
+.data-grid-wrap { position: relative; min-width: 0; min-height: 0; flex: 1; margin-top: 14px; border-color: #3a3d3f; border-radius: 9px; background: #2c2d2e; box-shadow: none; overscroll-behavior: contain; overflow: auto; }
+.data-grid-wrap:has(.data-grid) { flex: 0 1 auto; }
 .data-grid-wrap[aria-busy="true"] .data-grid { filter: blur(3px); opacity: .6; }
 .grid-loading { position: absolute; z-index: 2; inset: 0; display: flex; align-items: center; justify-content: center; gap: 11px; color: #d5d9d5; background: #22252680; }
 .grid-spinner { width: 28px; height: 28px; border: 3px solid #68736b; border-top-color: var(--accent); border-radius: 50%; animation: grid-spin .75s linear infinite; }
@@ -213,7 +214,7 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .row-actions .delete-row { color: #ff8585; }
 .column-name { gap: 6px; color: #e1e3e1; }
 .sort-arrows { color: #a3a7a4; font-size: 15px; }
-.grid-footer { min-height: 58px; flex: 0 0 auto; gap: 18px; padding: 8px 12px; border: 1px solid #3a3d3f; border-top: 0; color: #bec1bf; background: #282a2b; font-size: 12px; }
+.grid-footer { min-height: 58px; flex: 0 0 auto; gap: 18px; padding: 8px 0; margin-top: 12px; color: #bec1bf; font-size: 12px; }
 .grid-footer strong { color: #e0e2df; }
 .page-size-label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .page-size-label select { height: 34px; padding: 0 9px; border: 1px solid #45494b; border-radius: 6px; color: #d4d6d4; background: #222426; }

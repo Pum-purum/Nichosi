@@ -6,7 +6,8 @@ Nichosi is a quiet, local-first database workspace with an original visual ident
 
 - Use a compact top bar for row search, database and schema breadcrumbs, and a small set of contextual actions.
 - Keep a narrow app navigation rail beside a database-object tree. The object tree shows the active connection, database, schema, and tables.
-- Give the data grid most of the available space. Keep row actions at the far right, column names and types in the header, and pagination and row counts in a quiet footer.
+- Give the data grid most of the available space. Keep row actions at the far right, column names and types in the header, and pagination and row counts in a quiet footer on the workspace background, without a surrounding panel or border.
+- Size the scrollable data area to its contents up to the available height, with all four corners rounded. Short tables end immediately after their last row; keep a small gap before the pagination footer.
 - Show data columns before row actions, without a separate row-number column. Use blue for the edit icon and red for the delete icon.
 - Prefer clear, practical labels and familiar line icons. Use Lucide or Tabler icons and check the package license before redistributing bundled assets.
 - Use restrained borders, subtle hover states, and rounded controls. Avoid decorative glow, strong gradients, and oversized hero sections inside data-workspace screens.
