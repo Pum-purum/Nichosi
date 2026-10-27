@@ -32,6 +32,17 @@ const (
 	ConnectionInputDriverSqlite   ConnectionInputDriver = "sqlite"
 )
 
+// Defines values for DatabaseObjectType.
+const (
+	Event     DatabaseObjectType = "event"
+	Function  DatabaseObjectType = "function"
+	Procedure DatabaseObjectType = "procedure"
+	Role      DatabaseObjectType = "role"
+	Trigger   DatabaseObjectType = "trigger"
+	User      DatabaseObjectType = "user"
+	View      DatabaseObjectType = "view"
+)
+
 // Defines values for Environment.
 const (
 	Dev   Environment = "dev"
@@ -123,7 +134,9 @@ type ColumnProfile struct {
 
 // Connection defines model for Connection.
 type Connection struct {
-	Database string `json:"database"`
+	// Connected Whether the application currently holds an open database connection
+	Connected bool   `json:"connected"`
+	Database  string `json:"database"`
 
 	// DatabaseSizeBytes Database size in bytes; null when unavailable
 	DatabaseSizeBytes *int64           `json:"databaseSizeBytes"`
@@ -135,7 +148,6 @@ type Connection struct {
 	Name              string           `json:"name"`
 	Port              int              `json:"port"`
 	ReadOnly          bool             `json:"readOnly"`
-	Connected         bool             `json:"connected"`
 	User              string           `json:"user"`
 }
 
@@ -156,6 +168,20 @@ type ConnectionInput struct {
 
 // ConnectionInputDriver defines model for ConnectionInput.Driver.
 type ConnectionInputDriver string
+
+// DatabaseObject defines model for DatabaseObject.
+type DatabaseObject struct {
+	// Definition SQL body or view query, when visible to the current account. Never includes account authentication data.
+	Definition *string `json:"definition,omitempty"`
+
+	// Details Read-only object metadata. Accounts are server-wide and include their host.
+	Details *map[string]string `json:"details,omitempty"`
+	Name    string             `json:"name"`
+	Type    DatabaseObjectType `json:"type"`
+}
+
+// DatabaseObjectType defines model for DatabaseObject.Type.
+type DatabaseObjectType string
 
 // Environment defines model for Environment.
 type Environment string
@@ -230,8 +256,8 @@ type RowsPage struct {
 	ReadOnlyReason *string  `json:"readOnlyReason"`
 
 	// Rows Row values in column order. JSON null is SQL NULL.
-	Rows [][]interface{} `json:"rows"`
-	TotalRows int64 `json:"totalRows"`
+	Rows      [][]interface{} `json:"rows"`
+	TotalRows int64           `json:"totalRows"`
 }
 
 // RowsQuery defines model for RowsQuery.
@@ -245,22 +271,24 @@ type RowsQuery struct {
 
 // Schema defines model for Schema.
 type Schema struct {
-	Tables  []TableInfo      `json:"tables"`
 	Objects []DatabaseObject `json:"objects"`
-}
+	Tables  []TableInfo      `json:"tables"`
 
-type DatabaseObject struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	// Warnings Metadata categories unavailable due to account permissions.
+	Warnings *[]string `json:"warnings,omitempty"`
 }
 
 // TableInfo defines model for TableInfo.
 type TableInfo struct {
-	Columns      []Column `json:"columns"`
-	DataBytes    int64    `json:"dataBytes"`
-	IndexBytes   int64    `json:"indexBytes"`
-	Name         string   `json:"name"`
-	RowsEstimate int64    `json:"rowsEstimate"`
+	Columns []Column `json:"columns"`
+
+	// DataBytes Estimated table data size in bytes
+	DataBytes int64 `json:"dataBytes"`
+
+	// IndexBytes Estimated table index size in bytes
+	IndexBytes   int64  `json:"indexBytes"`
+	Name         string `json:"name"`
+	RowsEstimate int64  `json:"rowsEstimate"`
 }
 
 // TableStats defines model for TableStats.

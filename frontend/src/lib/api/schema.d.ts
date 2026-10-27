@@ -257,11 +257,19 @@ export interface components {
         Schema: {
             tables: components["schemas"]["TableInfo"][];
             objects: components["schemas"]["DatabaseObject"][];
+            /** @description Metadata categories unavailable due to account permissions. */
+            warnings?: string[];
         };
         DatabaseObject: {
             name: string;
             /** @enum {string} */
-            type: "view" | "trigger" | "procedure" | "function" | "event" | "role";
+            type: "view" | "trigger" | "procedure" | "function" | "event" | "role" | "user";
+            /** @description SQL body or view query, when visible to the current account. Never includes account authentication data. */
+            definition?: string;
+            /** @description Read-only object metadata. Accounts are server-wide and include their host. */
+            details?: {
+                [key: string]: string;
+            };
         };
         Filter: {
             column: string;
@@ -283,14 +291,17 @@ export interface components {
             cursor?: string | null;
             /** @default 200 */
             limit: number;
+            /** @default 0 */
+            offset: number;
         };
         RowsPage: {
             columns: components["schemas"]["Column"][];
             /** @description Row values in column order. JSON null is SQL NULL. */
             rows: unknown[][];
-        totalRows: number;
             nextCursor?: string | null;
             editable: boolean;
+            /** Format: int64 */
+            totalRows: number;
             readOnlyReason?: string | null;
         };
         Change: {

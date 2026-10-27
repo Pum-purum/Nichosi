@@ -323,3 +323,10 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .table-nav-item > .table-size { display: flex; flex: 0 0 68px; flex-direction: column; gap: 5px; color: #aeb5af; text-align: right; }
 .table-size-track { display: block; height: 4px; overflow: hidden; border-radius: 2px; background: #414745; }
 .table-size-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+
+.object-main { overflow: auto; flex-direction: column; }
+.object-detail-card { overflow: auto; }
+.object-detail-card h2 { margin-top: 28px; font-size: 14px; }
+.object-detail-meta strong { overflow-wrap: anywhere; }
+.object-definition { padding: 18px; background: #232627; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.metadata-warning { color: #e7be75; padding: 12px; }

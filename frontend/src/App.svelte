@@ -15,6 +15,7 @@
     { type: 'view', label: 'Views' },
     { type: 'trigger', label: 'Triggers' },
     { type: 'role', label: 'Roles' },
+    { type: 'user', label: 'Users' },
     { type: 'procedure', label: 'Procedures' },
     { type: 'function', label: 'Functions' },
     { type: 'event', label: 'Events' },
@@ -29,6 +30,7 @@
   let selectedObject = $state<DatabaseObject | null>(null);
   let tableSearch = $state('');
   let tables = $state<TableInfo[]>([]);
+  let metadataWarnings = $state<string[]>([]);
   let objects = $state<components['schemas']['DatabaseObject'][]>([]);
   let largestTableBytes = $derived(tables.reduce((largest, table) => Math.max(largest, table.dataBytes + table.indexBytes), 0));
   let rowsPage = $state<RowsPage | null>(null);
@@ -87,13 +89,13 @@
     rowsRequestId += 1;
     rowsLoading = false;
     pendingPageControl = null;
-    selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; rowsPage = null; tables = []; objects = []; error = ''; databaseLoading = true;
+    selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; rowsPage = null; tables = []; objects = []; metadataWarnings = []; error = ''; databaseLoading = true;
     try {
       const connected = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/connect`, { method: 'POST' });
       selectedConnection = connected;
       connections = connections.map((item) => item.id === connected.id ? connected : item);
       const schema = await request<components['schemas']['Schema']>(`/api/connections/${encodeURIComponent(connection.id)}/schema`);
-      tables = schema.tables; objects = schema.objects;
+      tables = schema.tables; objects = schema.objects; metadataWarnings = schema.warnings ?? [];
       if (tables.length) await selectTable(tables[0].name);
     } catch (cause) { error = cause instanceof Error ? cause.message : 'Could not read database schema'; }
     finally { databaseLoading = false; }
@@ -118,7 +120,7 @@
 
   function selectSection(type: ObjectType) {
     activeObjectType = type;
-    selectedObject = null;
+    selectedObject = objects.find((object) => object.type === type) ?? null;
     tableSearch = '';
     if (type === 'table' && !selectedTable && tables.length) void selectTable(tables[0].name);
   }
@@ -192,7 +194,7 @@
         <nav class="app-rail" aria-label="Workspace navigation">
           {#each objectSections as section}
             <button class:active={activeObjectType === section.type} class="rail-button category-rail-button" aria-label={section.label} aria-current={activeObjectType === section.type ? 'page' : undefined} title={section.label} onclick={() => selectSection(section.type)}>
-              {#if section.type === 'table'}<TableProperties size={19} />{:else if section.type === 'view'}<Eye size={19} />{:else if section.type === 'trigger'}<Zap size={19} />{:else if section.type === 'role'}<ShieldCheck size={19} />{:else if section.type === 'event'}<Clock size={19} />{:else if section.type === 'procedure'}<Braces size={19} />{:else}<Code2 size={19} />{/if}
+              {#if section.type === 'table'}<TableProperties size={19} />{:else if section.type === 'view'}<Eye size={19} />{:else if section.type === 'trigger'}<Zap size={19} />{:else if section.type === 'user'}<UserRound size={19} />{:else if section.type === 'role'}<ShieldCheck size={19} />{:else if section.type === 'event'}<Clock size={19} />{:else if section.type === 'procedure'}<Braces size={19} />{:else}<Code2 size={19} />{/if}
               {#if sectionCount(section.type) > 1}<small>{sectionCount(section.type) > 99 ? '99+' : sectionCount(section.type)}</small>{/if}
             </button>
           {/each}
@@ -215,7 +217,7 @@
               {:else}
                 {#each objects.filter((object) => object.type === activeObjectType && object.name.toLowerCase().includes(tableSearch.toLowerCase())) as object}
                   <button class:active={selectedObject?.name === object.name} class="table-nav-item" aria-current={selectedObject?.name === object.name ? 'page' : undefined} onclick={() => selectedObject = object}>
-                    {#if activeObjectType === 'view'}<Eye size={17} />{:else if activeObjectType === 'trigger'}<Zap size={17} />{:else if activeObjectType === 'role'}<ShieldCheck size={17} />{:else if activeObjectType === 'event'}<Clock size={17} />{:else if activeObjectType === 'procedure'}<Braces size={17} />{:else}<Code2 size={17} />{/if}<span>{object.name}</span>
+                    {#if activeObjectType === 'view'}<Eye size={17} />{:else if activeObjectType === 'trigger'}<Zap size={17} />{:else if activeObjectType === 'user'}<UserRound size={17} />{:else if activeObjectType === 'role'}<ShieldCheck size={17} />{:else if activeObjectType === 'event'}<Clock size={17} />{:else if activeObjectType === 'procedure'}<Braces size={17} />{:else}<Code2 size={17} />{/if}<span>{object.name}</span>
                   </button>
                 {/each}
               {/if}
@@ -238,8 +240,9 @@
           </div>
         {:else}
           <section class="object-main" aria-label={`${objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'} details`}>
+            {#each metadataWarnings as warning}<p class="metadata-warning">{warning}</p>{/each}
             {#if selectedObject}
-              <div class="object-detail-card"><span class="object-detail-icon"><Database size={22} /></span><p>{objectSections.find((section) => section.type === activeObjectType)?.label}</p><h1>{selectedObject.name}</h1><div class="object-detail-meta"><span>Type</span><strong>{selectedObject.type}</strong><span>Database</span><strong>{selectedConnection.database}</strong></div></div>
+              <div class="object-detail-card"><span class="object-detail-icon"><Database size={22} /></span><p>{objectSections.find((section) => section.type === activeObjectType)?.label}</p><h1>{selectedObject.name}</h1><div class="object-detail-meta"><span>Type</span><strong>{selectedObject.type}</strong><span>Scope</span><strong>{selectedObject.type === 'user' || selectedObject.type === 'role' ? 'Server' : selectedConnection.database}</strong>{#each Object.entries(selectedObject.details ?? {}) as [label, value]}<span>{label}</span><strong>{value || '—'}</strong>{/each}</div>{#if selectedObject.definition}<h2>SQL definition</h2><pre class="object-definition"><code>{selectedObject.definition}</code></pre>{:else if !['user', 'role'].includes(selectedObject.type)}<p>SQL definition is unavailable to this account.</p>{/if}</div>
             {:else}
               <div class="object-empty-state"><Database size={28} /><h1>{objectSections.find((section) => section.type === activeObjectType)?.label}</h1><p>Select an object from the left menu to view its details.</p></div>
             {/if}

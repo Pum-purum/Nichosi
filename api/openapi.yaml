@@ -266,12 +266,23 @@ components:
         objects:
           type: array
           items: { $ref: "#/components/schemas/DatabaseObject" }
+        warnings:
+          type: array
+          items: { type: string }
+          description: Metadata categories unavailable due to account permissions.
     DatabaseObject:
       type: object
       required: [name, type]
       properties:
         name: { type: string }
-        type: { type: string, enum: [view, trigger, procedure, function, event, role] }
+        type: { type: string, enum: [view, trigger, procedure, function, event, role, user] }
+        definition:
+          type: string
+          description: SQL body or view query, when visible to the current account. Never includes account authentication data.
+        details:
+          type: object
+          additionalProperties: { type: string }
+          description: Read-only object metadata. Accounts are server-wide and include their host.
     Filter:
       type: object
       required: [column, op]
