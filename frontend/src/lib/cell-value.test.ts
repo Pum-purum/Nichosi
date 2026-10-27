@@ -22,7 +22,7 @@ describe('SQL value presentation', () => {
 
   it('preserves precision, timezone, whitespace and JSON structure', () => {
     expect(cellValue('9007199254740993.0001', 'numeric').text).toBe('9007199254740993.0001');
-    expect(cellValue('2026-10-25T12:00:00+04:00', 'timestamp').text).toBe('2026-10-25  T  12:00:00+04:00');
+    expect(cellValue('2026-10-25T12:00:00+04:00', 'timestamp').text).toBe('2026-10-25T12:00:00+04:00');
     expect(cellValue('  hello  ', 'text').text).toBe('  hello  ');
     expect(cellValue('NULL', 'text').text).toBe('NULL');
     expect(cellValue('', 'text').text).toBe('');
@@ -30,7 +30,7 @@ describe('SQL value presentation', () => {
     expect(cellValue('2026-10-25', 'text').kind).toBe('text');
   });
 
-  it('separates the ISO datetime marker in the cell', () => {
-    expect(cellValue('2026-10-25T12:00:00Z', 'datetime').text).toContain('  T  ');
+  it('preserves the original ISO datetime representation', () => {
+    expect(cellValue('2026-10-25T12:00:00Z', 'datetime').text).toBe('2026-10-25T12:00:00Z');
   });
 });

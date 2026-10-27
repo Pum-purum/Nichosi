@@ -22,12 +22,10 @@ export function columnKind(sqlType: string): CellKind {
 export function cellValue(value: unknown, sqlType: string) {
   const kind = value === null ? 'null' : columnKind(sqlType);
   // Keep strings and decimal encodings intact; never parse values through Number or Date.
-  const rawText = value === null ? 'NULL'
+  const text = value === null ? 'NULL'
     : typeof value === 'string' ? value
     : typeof value === 'object' ? JSON.stringify(value)
     : String(value);
-  const text = ['date', 'time', 'datetime'].includes(kind) && typeof rawText === 'string'
-    ? rawText.replace('T', '  T  ') : rawText;
   const localTime = (kind === 'date' || kind === 'time' || kind === 'datetime') && typeof value === 'string'
     ? new Date(value).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }) : null;
   const label = localTime ? `${sqlType}: ${localTime} (browser timezone)` : kind === 'null' ? 'SQL NULL' : `${sqlType || 'Unknown type'}: ${text}`;
