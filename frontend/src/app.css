@@ -133,7 +133,6 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .data-grid tbody tr:hover td { background: #222729; }
 .data-grid tbody tr:last-child td { border-bottom: 0; }
 .data-grid th:last-child, .data-grid td:last-child { border-right: 0; }
-.row-index-head, .row-index { width: 38px; color: #858b86 !important; background: #202426 !important; text-align: center !important; }
 .add-column { width: 32px; color: #73816e !important; text-align: center !important; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid #496145; border-radius: 999px; color: #bfe4b2; background: #283128; font-size: 10px; }
 .status-pill > span { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
@@ -201,15 +200,12 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .data-grid { width: max-content; min-width: 100%; table-layout: auto; font-family: Roboto, 'Noto Sans', Inter, sans-serif; font-size: 14px; }
 .data-grid th { min-width: 150px; height: 74px; padding: 10px 14px; border-color: #414345; background: #242627; font-size: 14px; white-space: nowrap; }
 .data-grid th.actions-head { min-width: 120px; }
-.data-grid th.row-index-head { min-width: 66px; }
 .data-grid th small { display: flex; align-items: center; gap: 8px; color: #aeb1af; font: 13px Roboto, 'Noto Sans', Inter, sans-serif; }
 .data-grid th small em { padding: 2px 7px; border: 1px solid #4b4e50; border-radius: 10px; color: #d4d6d4; font-size: 10px; font-style: normal; }
 .data-grid td { height: 51px; max-width: none; padding: 0 14px; border-color: #414345; }
 .data-grid tbody tr:hover td { background: #353738; }
 .data-grid td:first-child { width: 102px; }
 .data-grid .actions-head { width: 120px; color: #d9dbd9; }
-.data-grid .row-index-head { width: 66px; }
-.row-index-head, .row-index { background: #292a2b !important; color: #c2c5c2 !important; text-align: left !important; }
 .row-actions { white-space: nowrap; }
 .row-actions button { display: inline-grid; width: 30px; height: 34px; place-items: center; margin-right: 2px; border: 0; border-radius: 5px; color: #bfc3c0; background: transparent; cursor: pointer; }
 .row-actions button:hover { color: #f0f2ef; background: #444748; }
