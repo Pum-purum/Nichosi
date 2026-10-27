@@ -23,7 +23,7 @@ Nichosi is a quiet, local-first database workspace with an original visual ident
 - Visual prototypes must be explicitly labeled. Do not imply that database features work until they are connected to the API.
 - Do not use third-party screenshots, logos, product names, or distinctive layouts as design targets. Use any user-provided reference only for high-level layout guidance unless the user explicitly asks otherwise.
 
-Table pagination immediately shows a spinner inside the clicked page or arrow button for at least 200 ms, including failed requests. The current page and table rows update together after loading succeeds. Pagination and page-size controls remain disabled while rows load. Table selection uses a loading overlay.
+Table pagination immediately shows a spinner inside the clicked page or arrow button for at least 200 ms, including failed requests. The current page and table rows update together after loading succeeds. Pagination and page-size controls remain disabled while rows load. During any table data refresh, blur and dim the table and disable interaction with its stale contents. Table selection also uses a translucent loading overlay.
 
 ## Table value types
 
