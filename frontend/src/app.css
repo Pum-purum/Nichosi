@@ -204,11 +204,13 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .data-grid th small em { padding: 2px 7px; border: 1px solid #4b4e50; border-radius: 10px; color: #d4d6d4; font-size: 10px; font-style: normal; }
 .data-grid td { height: 51px; max-width: none; padding: 0 14px; border-color: #414345; }
 .data-grid tbody tr:hover td { background: #353738; }
-.data-grid td:first-child { width: 102px; }
+.data-grid td.row-actions { width: 102px; }
 .data-grid .actions-head { width: 120px; color: #d9dbd9; }
 .row-actions { white-space: nowrap; }
 .row-actions button { display: inline-grid; width: 30px; height: 34px; place-items: center; margin-right: 2px; border: 0; border-radius: 5px; color: #bfc3c0; background: transparent; cursor: pointer; }
-.row-actions button:hover { color: #f0f2ef; background: #444748; }
+.row-actions button:hover { background: #444748; }
+.row-actions .edit-row { color: #79b8ff; }
+.row-actions .delete-row { color: #ff8585; }
 .column-name { gap: 6px; color: #e1e3e1; }
 .sort-arrows { color: #a3a7a4; font-size: 15px; }
 .grid-footer { min-height: 58px; flex: 0 0 auto; gap: 18px; padding: 8px 12px; border: 1px solid #3a3d3f; border-top: 0; color: #bec1bf; background: #282a2b; font-size: 12px; }
