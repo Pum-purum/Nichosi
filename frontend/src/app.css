@@ -231,9 +231,6 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .object-detail-icon { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 9px; color: var(--accent); background: #293d31; }
 .object-detail-card > p { margin: 23px 0 6px; color: #a8aeaa; font-size: 12px; }
 .object-detail-card h1, .object-empty-state h1 { margin: 0; color: #e5e7e4; font-size: 22px; font-weight: 600; }
-.object-detail-meta { display: grid; grid-template-columns: 100px 1fr; gap: 11px 16px; margin-top: 26px; padding-top: 20px; border-top: 1px solid #414546; font-size: 12px; }
-.object-detail-meta span { color: #a8aeaa; }
-.object-detail-meta strong { color: #daddda; font-weight: 500; }
 .object-empty-state { display: flex; width: 100%; min-width: 0; flex: 1; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #3c4142; border-radius: 10px; color: #828985; background: #2b2e2f; text-align: center; }
 .object-empty-state h1 { margin: 14px 0 8px; font-size: 18px; }
 .object-empty-state p { margin: 0; font-size: 13px; }
@@ -327,6 +324,5 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .object-main { overflow: auto; flex-direction: column; }
 .object-detail-card { overflow: auto; }
 .object-detail-card h2 { margin-top: 28px; font-size: 14px; }
-.object-detail-meta strong { overflow-wrap: anywhere; }
 .object-definition { padding: 18px; background: #232627; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
 .metadata-warning { color: #e7be75; padding: 12px; }

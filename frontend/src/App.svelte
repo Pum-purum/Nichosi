@@ -283,15 +283,11 @@
                 {:else if selectedObject.definition}
                   <ObjectDefinition definition={selectedObject.definition} name={selectedObject.name} sqlMode={selectedObject.details?.['SQL mode']} />
                 {:else}
-                  <p>SQL definition is unavailable. See the metadata below for details.</p>
+                  <p>{selectedObject.details?.['Definition status'] || 'SQL definition is unavailable to this account.'}</p>
                 {/if}
-                <div class="object-detail-meta">
-                  <span>Type</span><strong>{selectedObject.type}</strong>
-                  <span>Scope</span><strong>{selectedObject.type === 'user' || selectedObject.type === 'role' ? 'Server' : selectedConnection.database}</strong>
-                  {#each Object.entries(selectedObject.details ?? {}) as [label, value]}
-                    <span>{label}</span><strong>{value || '—'}</strong>
-                  {/each}
-                </div>
+                {#if selectedObject.type === 'role'}
+                  <p>Reconstructed CREATE ROLE; grants and original creation history are not included. Locked accounts without credentials are classified as roles.</p>
+                {/if}
               </div>
             {:else}
               <div class="object-empty-state"><Database size={28} /><h1>{objectSections.find((section) => section.type === activeObjectType)?.label}</h1><p>Select an object from the left menu to view its details.</p></div>
