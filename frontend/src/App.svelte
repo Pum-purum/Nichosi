@@ -163,6 +163,14 @@
     return object.name;
   }
 
+  function accountBadge(object: DatabaseObject) {
+    if (object.type !== 'user' && object.type !== 'role') return null;
+    const category = object.details?.['Account category'];
+    if (category === 'internal') return { label: 'Built-in', title: 'Recognized internal MySQL account identity; this does not indicate SYSTEM_USER privileges.' };
+    if (category === 'default-admin') return { label: 'Default admin', title: 'Standard initial administrator identity; current privileges and creation history are not verified.' };
+    return null;
+  }
+
   function sectionCount(type: ObjectType) {
     return type === 'table' ? tables.length : objects.filter((object) => object.type === type).length;
   }
@@ -254,8 +262,10 @@
                 {/each}
               {:else}
                 {#each objects.filter((object) => object.type === activeObjectType && objectDisplayName(object).toLowerCase().includes(tableSearch.toLowerCase())) as object}
+                  {@const badge = accountBadge(object)}
                   <button class:active={selectedObject?.name === object.name} class="table-nav-item" aria-current={selectedObject?.name === object.name ? 'page' : undefined} onclick={() => selectObject(object)}>
                     {#if activeObjectType === 'view'}<Eye size={17} />{:else if activeObjectType === 'trigger'}<Zap size={17} />{:else if activeObjectType === 'user'}<UserRound size={17} />{:else if activeObjectType === 'role'}<ShieldCheck size={17} />{:else if activeObjectType === 'event'}<Clock size={17} />{:else if activeObjectType === 'procedure'}<Braces size={17} />{:else}<Code2 size={17} />{/if}<span>{objectDisplayName(object)}</span>
+                    {#if badge}<small class="account-badge" title={badge.title}>{badge.label}</small>{/if}
                   </button>
                 {/each}
               {/if}
@@ -280,8 +290,12 @@
           <section class="object-main" aria-label={`${objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'} details`}>
             {#each metadataWarnings as warning}<p class="metadata-warning">{warning}</p>{/each}
             {#if selectedObject}
+              {@const badge = accountBadge(selectedObject)}
               <div class="object-detail-card">
-                <h1>{objectDisplayName(selectedObject)}</h1>
+                <div class="object-heading">
+                  <h1>{objectDisplayName(selectedObject)}</h1>
+                  {#if badge}<small class="account-badge" title={badge.title}>{badge.label}</small>{/if}
+                </div>
                 {#if definitionLoading}
                   <p role="status">Loading SQL definition…</p>
                 {:else if definitionError}

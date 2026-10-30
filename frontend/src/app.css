@@ -14,6 +14,9 @@
   --muted: #a2a6a2;
   --dim: #747a76;
   --accent: #83c96f;
+  --account-badge-text: #b1c9ec;
+  --account-badge-bg: #293649;
+  --account-badge-border: #45576e;
   --sql-keyword: #86afff;
   --sql-string: #9ecb8c;
   --sql-number: #c9a3e8;
@@ -331,3 +334,7 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .object-detail-card h2 { margin-top: 28px; font-size: 14px; }
 .object-definition { padding: 18px; background: #232627; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
 .metadata-warning { color: #e7be75; padding: 12px; }
+
+.object-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.object-heading h1 { overflow-wrap: anywhere; min-width: 0; }
+.account-badge, .table-nav-item > .account-badge { flex: 0 0 auto; padding: 3px 6px; border: 1px solid var(--account-badge-border); border-radius: 4px; background: var(--account-badge-bg); color: var(--account-badge-text); font: 10px/1.3 Roboto, sans-serif; white-space: nowrap; }

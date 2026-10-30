@@ -70,6 +70,7 @@ func MySQLObjects(ctx context.Context, db *sql.DB, database string) ([]Object, [
 			}
 			if q.kind == "account" {
 				object.Type = values[2].String
+				object.Details["Account category"] = mysqlAccountCategory(object.Details["Account name"], object.Details["Host"])
 				object.Details["Classification"] = "Locked accounts without credentials are shown as roles"
 			}
 			result = append(result, object)
@@ -176,4 +177,20 @@ func mysqlObjectDefinition(ctx context.Context, db *sql.DB, database string, obj
 		return fmt.Errorf("missing CREATE statement column")
 	}
 	return rows.Err()
+}
+
+// mysqlAccountCategory recognizes documented account identities, not their history
+// or effective privileges. Match both name and host without prefix heuristics.
+func mysqlAccountCategory(name, host string) string {
+	if host != "localhost" {
+		return "other"
+	}
+	switch name {
+	case "mysql.infoschema", "mysql.session", "mysql.sys":
+		return "internal"
+	case "root":
+		return "default-admin"
+	default:
+		return "other"
+	}
 }

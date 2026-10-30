@@ -44,6 +44,20 @@ issue one SHOW CREATE query per object. Definition failures leave the object
 metadata available; failed requests can be retried from the detail view. Each metadata category is limited to 1,000 objects; schema
 requests have a ten-second timeout.
 
+Account badges distinguish documented MySQL account identities in both lists
+and detail headings. `mysql.infoschema@localhost`, `mysql.session@localhost` and
+`mysql.sys@localhost` receive a Built-in badge; `root@localhost` receives Default
+admin. Matching is exact for both user and host, without `mysql.*` prefix matching.
+Other accounts remain unmarked: their creation by a person, installer or service
+cannot be established from these metadata. Renamed or third-party service
+accounts are not automatically recognized. These badges do not inspect effective
+privileges and do not represent MySQL's `SYSTEM_USER` account category, which is
+based on privileges and may also apply to manually created accounts.
+
+A MySQL role is a named collection of privileges that can be granted to user
+accounts or other roles. Roles and login users share account infrastructure;
+being a role and being an internal/reserved account are separate concepts.
+
 MySQL 8 does not distinguish roles from users in a dedicated account-type field.
 The optional administrator-installed `nichosi_account_metadata` view classifies
 locked accounts without credentials as roles (including unassigned roles).

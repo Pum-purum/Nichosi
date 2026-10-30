@@ -283,7 +283,7 @@ export interface components {
             type: "view" | "trigger" | "procedure" | "function" | "event" | "role" | "user";
             /** @description Complete server-reported CREATE statement for schema objects, fetched through getObjectDefinition and omitted from schema listings, when visible to the current account. Empty when unavailable; details explains why. For roles, a reconstructed CREATE ROLE statement only; grants and original creation history are not included. User authentication data is never requested or returned. */
             definition?: string;
-            /** @description Read-only object metadata. Accounts are server-wide and include their host. */
+            /** @description Read-only object metadata. Accounts are server-wide and include their host. Account category is internal for the known mysql.infoschema/mysql.session/mysql.sys accounts at localhost, default-admin for root at localhost, and other otherwise. This name-based recognition is not creation provenance, a privilege check, or the MySQL SYSTEM_USER category. */
             details?: {
                 [key: string]: string;
             };

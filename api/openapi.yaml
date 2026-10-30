@@ -303,7 +303,7 @@ components:
         details:
           type: object
           additionalProperties: { type: string }
-          description: Read-only object metadata. Accounts are server-wide and include their host.
+          description: Read-only object metadata. Accounts are server-wide and include their host. Account category is internal for the known mysql.infoschema/mysql.session/mysql.sys accounts at localhost, default-admin for root at localhost, and other otherwise. This name-based recognition is not creation provenance, a privilege check, or the MySQL SYSTEM_USER category.
     Filter:
       type: object
       required: [column, op]
