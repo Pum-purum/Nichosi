@@ -31,7 +31,7 @@ function tokenize(sql: string, noBackslashEscapes: boolean | undefined, ansiQuot
       if (end < 0) return null;
       i = end + 2;
       tokens.push({ text: sql.slice(start, i) });
-    } else if (char === '#' || (sql.startsWith('--', i) && /\s/.test(sql[i + 2] ?? ''))) {
+    } else if (char === '#' || (sql.startsWith('--', i) && /[\s\u0000-\u001f\u007f]/.test(sql[i + 2] ?? ''))) {
       while (i < sql.length && sql[i] !== '\n' && sql[i] !== '\r') i++;
       tokens.push({ text: sql.slice(start, i), lineComment: true });
     } else if (char === '@') {
@@ -228,4 +228,28 @@ export function formatDefinition(sql: string, sqlMode?: string): { sql: string; 
     i = phraseEnd;
   }
   return { sql: output.replace(/\s+$/, ''), formatted: true };
+}
+
+/** Remove presentation whitespace and ordinary comments without altering SQL values. */
+export function compactDefinition(sql: string, sqlMode?: string): string {
+  const modes = sqlMode?.toUpperCase().split(',').map((mode) => mode.trim());
+  const tokens = tokenize(sql, modes?.includes('NO_BACKSLASH_ESCAPES'), modes?.includes('ANSI_QUOTES') ?? false);
+  // Preserve the exact server text if string boundaries cannot be established safely.
+  if (!tokens) return sql;
+  let result = '';
+  let space = false;
+  for (const token of tokens) {
+    const blockComment = token.text.startsWith('/*');
+    const executable = token.text.match(/^(\/\*(?:!|M!|\+)\d*)/i);
+    if (token.whitespace || token.lineComment || (blockComment && !executable)) {
+      space = true;
+      continue;
+    }
+    if (space && result) result += ' ';
+    result += executable
+      ? executable[0] + ' ' + compactDefinition(token.text.slice(executable[0].length, -2), sqlMode) + '*/'
+      : token.text;
+    space = false;
+  }
+  return result;
 }

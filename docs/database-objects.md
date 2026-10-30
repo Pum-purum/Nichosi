@@ -3,16 +3,22 @@
 The object browser lists views, triggers, procedures, functions, scheduled events,
 roles and users. Select a category and an object to inspect its full CREATE statement.
 The detail panel focuses on SQL, without a separate metadata grid. The read-only code viewer includes line numbers, horizontal scrolling
-and a Copy SQL action. Highlight.js supplies local SQL syntax highlighting for
+and an icon-only Copy SQL action in the top-right corner of the code panel.
+The copy button appears on hover or keyboard focus, and stays visible on touch
+devices. Highlight.js supplies local SQL syntax highlighting for
 keywords, strings, numbers, comments and built-in types/functions, using the
 core and SQL grammar only. The library is bundled with the application; no CDN
-or runtime network request is used. Copy SQL always copies plain SQL text. SQL keywords and operators use a fixed blue accent. SQL is displayed with local whitespace formatting by
+or runtime network request is used. Copy SQL copies plain executable SQL, compacted to a single line by collapsing
+whitespace between tokens and removing ordinary comments. Executable MySQL/MariaDB
+comments and optimizer hints are retained. Whitespace inside quoted values and
+identifiers remains unchanged, including literal newlines; ambiguous quoting
+falls back to the exact server text to avoid changing SQL semantics. SQL keywords and operators use a fixed blue accent. SQL is displayed with local whitespace formatting by
 default: DDL clauses, event schedules and statement bodies use separate lines,
 and related clauses are indented by two spaces per level. Schedule details nest
 under ON SCHEDULE, event statements nest under DO, query expressions nest under
 SELECT/FROM/WHERE/SET, and nested BEGIN blocks and subqueries gain their own level. Quoted strings, identifiers and comments are
-protected from keyword formatting. Original SQL switches to the exact server
-text; Copy SQL copies the currently displayed version. Incomplete quoted text
+protected from keyword formatting. The viewer keeps its readable formatting while copying uses the compact
+server definition; there is no original-text toggle. Incomplete quoted text
 or comments fall back to the original definition. Backslash-containing strings
 also use the original text when the object SQL mode is unknown. Formatting does not execute SQL. Accounts are server-wide, identified by both user name and host.
 Definitions for views, triggers, procedures, functions and events come from

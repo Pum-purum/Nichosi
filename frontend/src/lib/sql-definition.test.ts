@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDefinition } from './sql-definition';
+import { compactDefinition, formatDefinition } from './sql-definition';
 
 describe('SQL definition formatting', () => {
   it('separates event schedule, options and body into readable lines', () => {
@@ -138,5 +138,42 @@ describe('SQL definition formatting', () => {
   it('keeps formatting stable when applied repeatedly', () => {
     const first = formatDefinition('CREATE TRIGGER t BEFORE UPDATE ON demo FOR EACH ROW BEGIN SET NEW.a=1; SET NEW.b=2; END').sql;
     expect(formatDefinition(first).sql).toBe(first);
+  });
+});
+
+
+describe('SQL clipboard compaction', () => {
+  it('copies multiline DDL as a single line without changing string spaces', () => {
+    const source = "CREATE EVENT e\n  COMMENT 'keep  two spaces'\n  DO\n    UPDATE demo\n      SET a=1\n      WHERE id=2;";
+    expect(compactDefinition(source)).toBe("CREATE EVENT e COMMENT 'keep  two spaces' DO UPDATE demo SET a=1 WHERE id=2;");
+  });
+
+  it('removes ordinary comments so line comments cannot swallow subsequent SQL', () => {
+    const source = 'SELECT 1 -- explanation\n + 2; # another comment\nSELECT/* multiline\n comment */3;';
+    expect(compactDefinition(source)).toBe('SELECT 1 + 2; SELECT 3;');
+  });
+
+  it('recognizes MySQL line comments followed by control characters', () => {
+    expect(compactDefinition('SELECT 1 --\u0001comment\n +2;')).toBe('SELECT 1 +2;');
+  });
+
+  it('preserves executable comments and optimizer hints while compacting their layout', () => {
+    const source = 'SELECT /*+\n MAX_EXECUTION_TIME(1000)\n */ 1; /*!50003\n CREATE EVENT e DO SELECT 1;\n */ /*M!100100\n SET @x=1\n */';
+    const result = compactDefinition(source);
+    expect(result).not.toMatch(/[\r\n]/);
+    expect(result).toContain('/*+ MAX_EXECUTION_TIME(1000)*/');
+    expect(result).toContain('/*!50003 CREATE EVENT e DO SELECT 1;*/');
+    expect(result).toContain('/*M!100100 SET @x=1*/');
+  });
+
+  it('preserves comment-looking text and escaped content inside quoted tokens', () => {
+    const source = "SELECT\n 'a -- b # c /* d */', `a  b`, 'it''s a value', 'a\\nb';";
+    expect(compactDefinition(source, '')).toBe(source.replace('SELECT\n ', 'SELECT '));
+  });
+
+  it('keeps literal newlines and ambiguous quoting unchanged rather than corrupting data', () => {
+    expect(compactDefinition("SELECT 'line 1\nline 2';")).toBe("SELECT 'line 1\nline 2';");
+    const source = String.raw`SELECT 'a\' FROM t`;
+    expect(compactDefinition(source)).toBe(source);
   });
 });
