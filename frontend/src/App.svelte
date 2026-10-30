@@ -233,14 +233,14 @@
           {#each objectSections as section}
             <button class:active={activeObjectType === section.type} class="rail-button category-rail-button" aria-label={section.label} aria-current={activeObjectType === section.type ? 'page' : undefined} title={section.label} onclick={() => selectSection(section.type)}>
               {#if section.type === 'table'}<TableProperties size={19} />{:else if section.type === 'view'}<Eye size={19} />{:else if section.type === 'trigger'}<Zap size={19} />{:else if section.type === 'user'}<UserRound size={19} />{:else if section.type === 'role'}<ShieldCheck size={19} />{:else if section.type === 'event'}<Clock size={19} />{:else if section.type === 'procedure'}<Braces size={19} />{:else}<Code2 size={19} />{/if}
-              {#if sectionCount(section.type) > 1}<small>{sectionCount(section.type) > 99 ? '99+' : sectionCount(section.type)}</small>{/if}
+              {#if sectionCount(section.type) > 0}<small>{sectionCount(section.type) > 99 ? '99+' : sectionCount(section.type)}</small>{/if}
             </button>
           {/each}
           <span class="rail-spacer"></span>
         </nav>
         <aside class="schema-sidebar">
           <div class="tree-branch">
-            <div class="object-list-heading"><strong>{objectSections.find((section) => section.type === activeObjectType)?.label}</strong>{#if sectionCount(activeObjectType) > 1}<small>{sectionCount(activeObjectType)}</small>{/if}</div>
+            <div class="object-list-heading"><strong>{objectSections.find((section) => section.type === activeObjectType)?.label}</strong>{#if sectionCount(activeObjectType) > 0}<small>{sectionCount(activeObjectType)}</small>{/if}</div>
             <label class="table-search"><Search size={14} /><input bind:value={tableSearch} placeholder={`Filter ${objectSections.find((section) => section.type === activeObjectType)?.label.toLowerCase() ?? 'objects'}`} aria-label="Filter database objects" /></label>
             <nav class="table-nav" aria-label={objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'}>
               {#if activeObjectType === 'table'}

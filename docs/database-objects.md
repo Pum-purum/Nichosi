@@ -1,7 +1,8 @@
 # MySQL database objects
 
 The object browser lists views, triggers, procedures, functions, scheduled events,
-roles and users. Select a category and an object to inspect its full CREATE statement.
+roles and users. Category badges and list headings display the object count
+whenever it is at least one; empty categories have no count badge. Select a category and an object to inspect its full CREATE statement.
 The detail panel starts with the object name and SQL, without a decorative icon,
 repeated category label or separate metadata grid. The read-only code viewer includes line numbers, horizontal scrolling
 and an icon-only Copy SQL action in the top-right corner of the code panel.
