@@ -2,6 +2,7 @@
   import { Braces, Clock, Code2, Columns3, Database, Eye, Filter, HardDrive, KeyRound, Pencil, Search, Server, ShieldCheck, SlidersHorizontal, TableProperties, Trash2, Unplug, UserRound, Zap } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import CellValue from './lib/CellValue.svelte';
+  import ObjectDefinition from './lib/ObjectDefinition.svelte';
   import type { components } from './lib/api/schema';
 
   type Connection = components['schemas']['Connection'];
@@ -28,6 +29,9 @@
   let selectedTable = $state('');
   let activeObjectType = $state<ObjectType>('table');
   let selectedObject = $state<DatabaseObject | null>(null);
+  let definitionLoading = $state(false);
+  let definitionError = $state('');
+  let definitionRequestId = 0;
   let tableSearch = $state('');
   let tables = $state<TableInfo[]>([]);
   let metadataWarnings = $state<string[]>([]);
@@ -89,7 +93,7 @@
     rowsRequestId += 1;
     rowsLoading = false;
     pendingPageControl = null;
-    selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; rowsPage = null; tables = []; objects = []; metadataWarnings = []; error = ''; databaseLoading = true;
+    selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; rowsPage = null; tables = []; objects = []; metadataWarnings = []; error = ''; databaseLoading = true;
     try {
       const connected = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/connect`, { method: 'POST' });
       selectedConnection = connected;
@@ -105,7 +109,7 @@
     if (!selectedConnection) return;
     const requestId = ++rowsRequestId;
     const minimumLoadingTime = new Promise<void>((resolve) => setTimeout(resolve, 200));
-    activeObjectType = 'table'; selectedObject = null; selectedTable = name; error = ''; rowsLoading = true; pendingPageControl = control;
+    activeObjectType = 'table'; selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; selectedTable = name; error = ''; rowsLoading = true; pendingPageControl = control;
     try {
       const result = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/tables/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: pageSize, offset: (page - 1) * pageSize }) });
       await minimumLoadingTime;
@@ -120,9 +124,34 @@
 
   function selectSection(type: ObjectType) {
     activeObjectType = type;
-    selectedObject = objects.find((object) => object.type === type) ?? null;
+    const object = objects.find((object) => object.type === type) ?? null;
+    if (object) void selectObject(object);
+    else { selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; }
     tableSearch = '';
     if (type === 'table' && !selectedTable && tables.length) void selectTable(tables[0].name);
+  }
+
+  async function selectObject(object: DatabaseObject) {
+    selectedObject = object;
+    const connectionId = selectedConnection?.id;
+    const requestId = ++definitionRequestId;
+    definitionError = '';
+    definitionLoading = false;
+    if (!connectionId || object.type === 'role' || object.type === 'user') return;
+    definitionLoading = true;
+    try {
+      const query = new URLSearchParams({ type: object.type, name: object.name });
+      const result = await request<DatabaseObject>(`/api/connections/${encodeURIComponent(connectionId)}/object-definition?${query}`);
+      if (requestId === definitionRequestId && selectedObject === object && selectedConnection?.id === connectionId) {
+        selectedObject = { ...object, definition: result.definition, details: { ...object.details, ...result.details } };
+      }
+    } catch (cause) {
+      if (requestId === definitionRequestId && selectedObject === object && selectedConnection?.id === connectionId) {
+        definitionError = cause instanceof Error ? cause.message : 'Could not load SQL definition';
+      }
+    } finally {
+      if (requestId === definitionRequestId) definitionLoading = false;
+    }
   }
 
   function sectionCount(type: ObjectType) {
@@ -139,7 +168,7 @@
       connections = connections.map((item) => item.id === closed.id ? closed : item);
       selectedConnection = null;
       selectedTable = '';
-      selectedObject = null;
+      selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = '';
       rowsPage = null;
       error = '';
     } catch (cause) {
@@ -216,7 +245,7 @@
                 {/each}
               {:else}
                 {#each objects.filter((object) => object.type === activeObjectType && object.name.toLowerCase().includes(tableSearch.toLowerCase())) as object}
-                  <button class:active={selectedObject?.name === object.name} class="table-nav-item" aria-current={selectedObject?.name === object.name ? 'page' : undefined} onclick={() => selectedObject = object}>
+                  <button class:active={selectedObject?.name === object.name} class="table-nav-item" aria-current={selectedObject?.name === object.name ? 'page' : undefined} onclick={() => selectObject(object)}>
                     {#if activeObjectType === 'view'}<Eye size={17} />{:else if activeObjectType === 'trigger'}<Zap size={17} />{:else if activeObjectType === 'user'}<UserRound size={17} />{:else if activeObjectType === 'role'}<ShieldCheck size={17} />{:else if activeObjectType === 'event'}<Clock size={17} />{:else if activeObjectType === 'procedure'}<Braces size={17} />{:else}<Code2 size={17} />{/if}<span>{object.name}</span>
                   </button>
                 {/each}
@@ -242,7 +271,28 @@
           <section class="object-main" aria-label={`${objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'} details`}>
             {#each metadataWarnings as warning}<p class="metadata-warning">{warning}</p>{/each}
             {#if selectedObject}
-              <div class="object-detail-card"><span class="object-detail-icon"><Database size={22} /></span><p>{objectSections.find((section) => section.type === activeObjectType)?.label}</p><h1>{selectedObject.name}</h1><div class="object-detail-meta"><span>Type</span><strong>{selectedObject.type}</strong><span>Scope</span><strong>{selectedObject.type === 'user' || selectedObject.type === 'role' ? 'Server' : selectedConnection.database}</strong>{#each Object.entries(selectedObject.details ?? {}) as [label, value]}<span>{label}</span><strong>{value || '—'}</strong>{/each}</div>{#if selectedObject.definition}<h2>SQL definition</h2><pre class="object-definition"><code>{selectedObject.definition}</code></pre>{:else if !['user', 'role'].includes(selectedObject.type)}<p>SQL definition is unavailable to this account.</p>{/if}</div>
+              <div class="object-detail-card">
+                <span class="object-detail-icon"><Database size={22} /></span>
+                <p>{objectSections.find((section) => section.type === activeObjectType)?.label}</p>
+                <h1>{selectedObject.name}</h1>
+                {#if definitionLoading}
+                  <p role="status">Loading SQL definition…</p>
+                {:else if definitionError}
+                  <p role="alert">{definitionError}</p>
+                  <button onclick={() => selectedObject && selectObject(selectedObject)}>Retry SQL definition</button>
+                {:else if selectedObject.definition}
+                  <ObjectDefinition definition={selectedObject.definition} name={selectedObject.name} sqlMode={selectedObject.details?.['SQL mode']} />
+                {:else}
+                  <p>SQL definition is unavailable. See the metadata below for details.</p>
+                {/if}
+                <div class="object-detail-meta">
+                  <span>Type</span><strong>{selectedObject.type}</strong>
+                  <span>Scope</span><strong>{selectedObject.type === 'user' || selectedObject.type === 'role' ? 'Server' : selectedConnection.database}</strong>
+                  {#each Object.entries(selectedObject.details ?? {}) as [label, value]}
+                    <span>{label}</span><strong>{value || '—'}</strong>
+                  {/each}
+                </div>
+              </div>
             {:else}
               <div class="object-empty-state"><Database size={28} /><h1>{objectSections.find((section) => section.type === activeObjectType)?.label}</h1><p>Select an object from the left menu to view its details.</p></div>
             {/if}

@@ -24,11 +24,11 @@ func MySQLObjects(ctx context.Context, db *sql.DB, database string) ([]Object, [
 		kind   string
 		labels []string
 	}{
-		{`SELECT TABLE_NAME, VIEW_DEFINITION, SECURITY_TYPE, CHECK_OPTION FROM information_schema.views WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME LIMIT 1001`, []any{database}, "view", []string{"Security", "Check option"}},
-		{`SELECT TRIGGER_NAME, ACTION_STATEMENT, EVENT_MANIPULATION, EVENT_OBJECT_TABLE, ACTION_TIMING FROM information_schema.triggers WHERE TRIGGER_SCHEMA = ? ORDER BY TRIGGER_NAME LIMIT 1001`, []any{database}, "trigger", []string{"Event", "Table", "Timing"}},
-		{`SELECT ROUTINE_NAME, ROUTINE_DEFINITION, ROUTINE_TYPE, DTD_IDENTIFIER, IS_DETERMINISTIC, SECURITY_TYPE FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? ORDER BY ROUTINE_NAME LIMIT 1001`, []any{database}, "routine", []string{"Routine type", "Returns", "Deterministic", "Security"}},
-		{`SELECT EVENT_NAME, EVENT_DEFINITION, STATUS, EVENT_TYPE, INTERVAL_VALUE, INTERVAL_FIELD, CAST(EXECUTE_AT AS CHAR), CAST(STARTS AS CHAR), CAST(ENDS AS CHAR), TIME_ZONE FROM information_schema.events WHERE EVENT_SCHEMA = ? ORDER BY EVENT_NAME LIMIT 1001`, []any{database}, "event", []string{"Status", "Schedule", "Interval", "Unit", "Execute at", "Starts", "Ends", "Time zone"}},
-		{`SELECT CONCAT(QUOTE(account_name), '@', QUOTE(account_host)), '', account_type, account_locked FROM ` + QuoteIdent(database) + `.nichosi_account_metadata ORDER BY account_name, account_host LIMIT 1001`, nil, "account", []string{"Account type", "Locked"}},
+		{`SELECT TABLE_NAME, '', SECURITY_TYPE, CHECK_OPTION, DEFINER, CHARACTER_SET_CLIENT, COLLATION_CONNECTION FROM information_schema.views WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME LIMIT 1001`, []any{database}, "view", []string{"Security", "Check option", "Definer", "Character set client", "Collation connection"}},
+		{`SELECT TRIGGER_NAME, '', EVENT_MANIPULATION, EVENT_OBJECT_TABLE, ACTION_TIMING, DEFINER, SQL_MODE, CAST(CREATED AS CHAR) FROM information_schema.triggers WHERE TRIGGER_SCHEMA = ? ORDER BY TRIGGER_NAME LIMIT 1001`, []any{database}, "trigger", []string{"Event", "Table", "Timing", "Definer", "SQL mode", "Created"}},
+		{`SELECT ROUTINE_NAME, '', ROUTINE_TYPE, DTD_IDENTIFIER, IS_DETERMINISTIC, SECURITY_TYPE, DEFINER, SQL_DATA_ACCESS, ROUTINE_COMMENT, SQL_MODE, CAST(CREATED AS CHAR), CAST(LAST_ALTERED AS CHAR) FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? ORDER BY ROUTINE_NAME LIMIT 1001`, []any{database}, "routine", []string{"Routine type", "Returns", "Deterministic", "Security", "Definer", "SQL data access", "Comment", "SQL mode", "Created", "Last altered"}},
+		{`SELECT EVENT_NAME, '', STATUS, EVENT_TYPE, INTERVAL_VALUE, INTERVAL_FIELD, CAST(EXECUTE_AT AS CHAR), CAST(STARTS AS CHAR), CAST(ENDS AS CHAR), TIME_ZONE, DEFINER, ON_COMPLETION, EVENT_COMMENT, SQL_MODE, CAST(CREATED AS CHAR), CAST(LAST_ALTERED AS CHAR), CAST(LAST_EXECUTED AS CHAR) FROM information_schema.events WHERE EVENT_SCHEMA = ? ORDER BY EVENT_NAME LIMIT 1001`, []any{database}, "event", []string{"Status", "Schedule", "Interval", "Unit", "Execute at", "Starts", "Ends", "Time zone", "Definer", "On completion", "Comment", "SQL mode", "Created", "Last altered", "Last executed"}},
+		{`SELECT CONCAT(QUOTE(account_name), '@', QUOTE(account_host)), '', account_type, account_locked, account_name, account_host FROM ` + QuoteIdent(database) + `.nichosi_account_metadata ORDER BY account_name, account_host LIMIT 1001`, nil, "account", []string{"Account type", "Locked", "Account name", "Host"}},
 	}
 	for _, q := range queries {
 		rows, err := db.QueryContext(ctx, q.query, q.args...)
@@ -80,8 +80,100 @@ func MySQLObjects(ctx context.Context, db *sql.DB, database string) ([]Object, [
 			return nil, nil, err
 		}
 	}
+	// Keep listings bounded and cheap; full schema DDL is fetched on demand.
+	for i := range result {
+		object := &result[i]
+		if object.Type == "role" {
+			object.Definition = "CREATE ROLE " + QuoteIdent(object.Details["Account name"]) + "@" + QuoteIdent(object.Details["Host"]) + ";"
+			object.Details["Definition source"] = "Reconstructed CREATE ROLE; grants and original creation history are not included"
+			continue
+		}
+		if object.Type == "user" {
+			object.Details["Definition status"] = "User creation SQL is hidden to protect authentication data"
+			continue
+		}
+	}
 	return result, warnings, nil
+}
+
+// MySQLObjectDefinition retrieves one schema object's current server-reported
+// CREATE statement. Account types are deliberately excluded to protect secrets.
+func MySQLObjectDefinition(ctx context.Context, db *sql.DB, database, kind, name string) (Object, error) {
+	object := Object{Name: name, Type: kind, Details: map[string]string{}}
+	switch kind {
+	case "view", "trigger", "procedure", "function", "event":
+	default:
+		return object, fmt.Errorf("unsupported object type")
+	}
+	if name == "" {
+		return object, fmt.Errorf("object name is required")
+	}
+	if err := mysqlObjectDefinition(ctx, db, database, &object); err != nil {
+		if ctx.Err() != nil {
+			return object, fmt.Errorf("read object definition: %w", ctx.Err())
+		}
+		// Do not expose server errors, which may contain sensitive SQL.
+		object.Definition = ""
+		object.Details["Definition status"] = "Full CREATE statement unavailable; the object may have changed or the account lacks permission"
+	}
+	return object, nil
 }
 
 // QuoteIdent quotes a MySQL identifier.
 func QuoteIdent(name string) string { return "`" + strings.ReplaceAll(name, "`", "``") + "`" }
+
+// mysqlObjectDefinition reads columns by name because SHOW CREATE result layouts
+// differ across object kinds and MySQL/MariaDB versions.
+func mysqlObjectDefinition(ctx context.Context, db *sql.DB, database string, object *Object) error {
+	kind, column := "", ""
+	switch object.Type {
+	case "view":
+		kind, column = "VIEW", "Create View"
+	case "trigger":
+		kind, column = "TRIGGER", "SQL Original Statement"
+	case "procedure":
+		kind, column = "PROCEDURE", "Create Procedure"
+	case "function":
+		kind, column = "FUNCTION", "Create Function"
+	case "event":
+		kind, column = "EVENT", "Create Event"
+	default:
+		return fmt.Errorf("unsupported object type")
+	}
+	rows, err := db.QueryContext(ctx, "SHOW CREATE "+kind+" "+QuoteIdent(database)+"."+QuoteIdent(object.Name))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	columns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		return fmt.Errorf("missing CREATE statement")
+	}
+	values := make([]sql.NullString, len(columns))
+	dest := make([]any, len(columns))
+	for i := range values {
+		dest[i] = &values[i]
+	}
+	if err := rows.Scan(dest...); err != nil {
+		return err
+	}
+	for i, name := range columns {
+		if strings.EqualFold(name, column) || object.Type == "trigger" && strings.EqualFold(name, "Create Trigger") {
+			if !values[i].Valid || values[i].String == "" {
+				return fmt.Errorf("CREATE statement is hidden")
+			}
+			object.Definition = values[i].String
+			object.Details["Definition source"] = "SHOW CREATE " + kind
+		}
+	}
+	if object.Definition == "" {
+		return fmt.Errorf("missing CREATE statement column")
+	}
+	return rows.Err()
+}

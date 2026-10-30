@@ -52,6 +52,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/{connId}/object-definition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Fetch the full current CREATE statement for one schema object on demand with a ten-second timeout. Account definitions are provided only through safe schema metadata. */
+        get: operations["getObjectDefinition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections/{connId}/connect": {
         parameters: {
             query?: never;
@@ -264,7 +281,7 @@ export interface components {
             name: string;
             /** @enum {string} */
             type: "view" | "trigger" | "procedure" | "function" | "event" | "role" | "user";
-            /** @description SQL body or view query, when visible to the current account. Never includes account authentication data. */
+            /** @description Complete server-reported CREATE statement for schema objects, fetched through getObjectDefinition and omitted from schema listings, when visible to the current account. Empty when unavailable; details explains why. For roles, a reconstructed CREATE ROLE statement only; grants and original creation history are not included. User authentication data is never requested or returned. */
             definition?: string;
             /** @description Read-only object metadata. Accounts are server-wide and include their host. */
             details?: {
@@ -480,6 +497,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Schema"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getObjectDefinition: {
+        parameters: {
+            query: {
+                type: "view" | "trigger" | "procedure" | "function" | "event";
+                name: string;
+            };
+            header?: never;
+            path: {
+                connId: components["parameters"]["ConnId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Definition and its availability metadata; unavailable definitions are empty. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseObject"];
                 };
             };
             default: components["responses"]["Error"];

@@ -49,8 +49,26 @@ func TestMySQLDemoObjects(t *testing.T) {
 		if strings.HasPrefix(object.Name, "nichosi_demo_") || strings.Contains(object.Name, "'nichosi_demo_") {
 			found[object.Type] = true
 		}
-		if object.Type != "user" && object.Type != "role" && object.Definition == "" {
-			t.Errorf("missing definition for %s", object.Name)
+		if object.Type != "user" && object.Type != "role" {
+			if object.Definition != "" {
+				t.Error("schema listings must not eagerly fetch definitions")
+			}
+			object, err = MySQLObjectDefinition(ctx, db, "nichosi_lab", object.Type, object.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(strings.ToUpper(object.Definition), "CREATE ") {
+				t.Errorf("missing full CREATE statement for %s", object.Name)
+			}
+			if !strings.HasPrefix(object.Details["Definition source"], "SHOW CREATE ") {
+				t.Errorf("missing server definition source for %s", object.Name)
+			}
+		}
+		if object.Type == "user" && object.Definition != "" {
+			t.Error("user authentication definition must not be returned")
+		}
+		if object.Type == "role" && !strings.HasPrefix(object.Definition, "CREATE ROLE ") {
+			t.Errorf("missing reconstructed role definition for %s", object.Name)
 		}
 	}
 	for _, kind := range []string{"view", "trigger", "procedure", "function", "event", "user", "role"} {

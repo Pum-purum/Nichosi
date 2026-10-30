@@ -59,6 +59,27 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Schema" }
         default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/object-definition:
+    get:
+      operationId: getObjectDefinition
+      description: Fetch the full current CREATE statement for one schema object on demand with a ten-second timeout. Account definitions are provided only through safe schema metadata.
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - name: type
+          in: query
+          required: true
+          schema: { type: string, enum: [view, trigger, procedure, function, event] }
+        - name: name
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Definition and its availability metadata; unavailable definitions are empty.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatabaseObject" }
+        default: { $ref: "#/components/responses/Error" }
   /api/connections/{connId}/connect:
     post:
       operationId: connectConnection
@@ -278,7 +299,7 @@ components:
         type: { type: string, enum: [view, trigger, procedure, function, event, role, user] }
         definition:
           type: string
-          description: SQL body or view query, when visible to the current account. Never includes account authentication data.
+          description: Complete server-reported CREATE statement for schema objects, fetched through getObjectDefinition and omitted from schema listings, when visible to the current account. Empty when unavailable; details explains why. For roles, a reconstructed CREATE ROLE statement only; grants and original creation history are not included. User authentication data is never requested or returned.
         details:
           type: object
           additionalProperties: { type: string }

@@ -34,13 +34,13 @@ const (
 
 // Defines values for DatabaseObjectType.
 const (
-	Event     DatabaseObjectType = "event"
-	Function  DatabaseObjectType = "function"
-	Procedure DatabaseObjectType = "procedure"
-	Role      DatabaseObjectType = "role"
-	Trigger   DatabaseObjectType = "trigger"
-	User      DatabaseObjectType = "user"
-	View      DatabaseObjectType = "view"
+	DatabaseObjectTypeEvent     DatabaseObjectType = "event"
+	DatabaseObjectTypeFunction  DatabaseObjectType = "function"
+	DatabaseObjectTypeProcedure DatabaseObjectType = "procedure"
+	DatabaseObjectTypeRole      DatabaseObjectType = "role"
+	DatabaseObjectTypeTrigger   DatabaseObjectType = "trigger"
+	DatabaseObjectTypeUser      DatabaseObjectType = "user"
+	DatabaseObjectTypeView      DatabaseObjectType = "view"
 )
 
 // Defines values for Environment.
@@ -75,6 +75,15 @@ const (
 	ForeignKey RelationEdgeKind = "foreignKey"
 	Inferred   RelationEdgeKind = "inferred"
 	Manual     RelationEdgeKind = "manual"
+)
+
+// Defines values for GetObjectDefinitionParamsType.
+const (
+	GetObjectDefinitionParamsTypeEvent     GetObjectDefinitionParamsType = "event"
+	GetObjectDefinitionParamsTypeFunction  GetObjectDefinitionParamsType = "function"
+	GetObjectDefinitionParamsTypeProcedure GetObjectDefinitionParamsType = "procedure"
+	GetObjectDefinitionParamsTypeTrigger   GetObjectDefinitionParamsType = "trigger"
+	GetObjectDefinitionParamsTypeView      GetObjectDefinitionParamsType = "view"
 )
 
 // ApplyResult defines model for ApplyResult.
@@ -171,7 +180,7 @@ type ConnectionInputDriver string
 
 // DatabaseObject defines model for DatabaseObject.
 type DatabaseObject struct {
-	// Definition SQL body or view query, when visible to the current account. Never includes account authentication data.
+	// Definition Complete server-reported CREATE statement for schema objects, fetched through getObjectDefinition and omitted from schema listings, when visible to the current account. Empty when unavailable; details explains why. For roles, a reconstructed CREATE ROLE statement only; grants and original creation history are not included. User authentication data is never requested or returned.
 	Definition *string `json:"definition,omitempty"`
 
 	// Details Read-only object metadata. Accounts are server-wide and include their host.
@@ -309,6 +318,15 @@ type ConnId = string
 
 // Table defines model for Table.
 type Table = string
+
+// GetObjectDefinitionParams defines parameters for GetObjectDefinition.
+type GetObjectDefinitionParams struct {
+	Type GetObjectDefinitionParamsType `form:"type" json:"type"`
+	Name string                        `form:"name" json:"name"`
+}
+
+// GetObjectDefinitionParamsType defines parameters for GetObjectDefinition.
+type GetObjectDefinitionParamsType string
 
 // GetRelationsParams defines parameters for GetRelations.
 type GetRelationsParams struct {

@@ -76,6 +76,7 @@ func main() {
 	mux.Handle("POST /api/connections/{connId}/connect", application.authorize(http.HandlerFunc(application.connectConnection)))
 	mux.Handle("POST /api/connections/{connId}/disconnect", application.authorize(http.HandlerFunc(application.disconnectConnection)))
 	mux.Handle("GET /api/connections/{connId}/schema", application.authorize(http.HandlerFunc(application.getSchema)))
+	mux.Handle("GET /api/connections/{connId}/object-definition", application.authorize(http.HandlerFunc(application.getObjectDefinition)))
 	mux.Handle("POST /api/connections/{connId}/tables/{table}/rows", application.authorize(http.HandlerFunc(application.queryRows)))
 	mux.Handle("/", application.static)
 
@@ -253,6 +254,39 @@ func (a *app) getSchema(w http.ResponseWriter, r *http.Request) {
 		schema.Objects = append(schema.Objects, DatabaseObject{Name: object.Name, Type: DatabaseObjectType(object.Type), Definition: &definition, Details: &details})
 	}
 	writeJSON(w, http.StatusOK, schema)
+}
+
+func (a *app) getObjectDefinition(w http.ResponseWriter, r *http.Request) {
+	kind, name := r.URL.Query().Get("type"), r.URL.Query().Get("name")
+	switch kind {
+	case "view", "trigger", "procedure", "function", "event":
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_object_type", "A schema object type is required")
+		return
+	}
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "invalid_object_name", "An object name is required")
+		return
+	}
+	item := a.connection(r.PathValue("connId"))
+	if item == nil {
+		writeError(w, http.StatusNotFound, "not_found", "Connection not found")
+		return
+	}
+	item.mu.RLock()
+	defer item.mu.RUnlock()
+	if item.pool == nil {
+		writeError(w, http.StatusConflict, "disconnected", "Connection is closed")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	object, err := driver.MySQLObjectDefinition(ctx, item.pool, item.Database, kind, name)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "metadata_failed", "Could not read object definition")
+		return
+	}
+	writeJSON(w, http.StatusOK, DatabaseObject{Name: object.Name, Type: DatabaseObjectType(object.Type), Definition: &object.Definition, Details: &object.Details})
 }
 
 func quoteMySQLIdent(name string) string { return "`" + strings.ReplaceAll(name, "`", "``") + "`" }
