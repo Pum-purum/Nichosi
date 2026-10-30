@@ -4,6 +4,8 @@
   import CellValue from './lib/CellValue.svelte';
   import ObjectDefinition from './lib/ObjectDefinition.svelte';
   import UserDetails from './lib/UserDetails.svelte';
+  import DataError from './lib/DataError.svelte';
+  import { recoveryConnection } from './lib/connection-recovery';
   import type { components } from './lib/api/schema';
 
   type Connection = components['schemas']['Connection'];
@@ -39,13 +41,15 @@
   let objects = $state<components['schemas']['DatabaseObject'][]>([]);
   let largestTableBytes = $derived(tables.reduce((largest, table) => Math.max(largest, table.dataBytes + table.indexBytes), 0));
   let rowsPage = $state<RowsPage | null>(null);
-  const rowActionDisabledReason = $derived(selectedConnection?.readOnly ? 'Read-only connection' : !rowsPage?.editable ? rowsPage?.readOnlyReason || 'Read-only table' : '');
+  const rowActionDisabledReason = $derived(selectedConnection?.readonly ? 'Read-only connection' : !rowsPage?.editable ? rowsPage?.readOnlyReason || 'Read-only table' : '');
   let currentPage = $state(1);
   let pageSize = $state(50);
   let databaseLoading = $state(false);
   let rowsLoading = $state(false);
   let pendingPageControl = $state<number | 'previous' | 'next' | null>(null);
   let rowsRequestId = 0;
+  let databaseRequestId = 0;
+  let reconnecting = $state(false);
   let totalPages = $derived(Math.max(1, Math.ceil((rowsPage?.totalRows ?? 0) / pageSize)));
   let pagedRows = $derived(rowsPage?.rows ?? []);
   let pageItems = $derived.by(() => {
@@ -92,19 +96,22 @@
   }
 
   async function openDatabase(connection: Connection) {
+    const requestId = ++databaseRequestId;
     rowsRequestId += 1;
     rowsLoading = false;
     pendingPageControl = null;
     selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; rowsPage = null; tables = []; objects = []; metadataWarnings = []; error = ''; databaseLoading = true;
     try {
       const connected = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/connect`, { method: 'POST' });
+      if (requestId !== databaseRequestId) return;
       selectedConnection = connected;
       connections = connections.map((item) => item.id === connected.id ? connected : item);
       const schema = await request<components['schemas']['Schema']>(`/api/connections/${encodeURIComponent(connection.id)}/schema`);
+      if (requestId !== databaseRequestId) return;
       tables = schema.tables; objects = schema.objects; metadataWarnings = schema.warnings ?? [];
       if (tables.length) await selectTable(tables[0].name);
-    } catch (cause) { error = cause instanceof Error ? cause.message : 'Could not read database schema'; }
-    finally { databaseLoading = false; }
+    } catch (cause) { if (requestId === databaseRequestId) error = cause instanceof Error ? cause.message : 'Could not read database schema'; }
+    finally { if (requestId === databaseRequestId) databaseLoading = false; }
   }
 
   async function selectTable(name: string, page = 1, control: number | 'previous' | 'next' | null = null) {
@@ -122,6 +129,40 @@
     } finally {
       if (requestId === rowsRequestId) { rowsLoading = false; pendingPageControl = null; }
     }
+  }
+
+  async function reconnectDatabase() {
+    const previous = selectedConnection;
+    if (!previous || reconnecting) return;
+    const requestId = databaseRequestId;
+    reconnecting = true;
+    try {
+      const current = await request<Connection[]>('/api/connections');
+      if (selectedConnection !== previous || requestId !== databaseRequestId) return;
+      connections = current;
+      const refreshed = recoveryConnection(previous, current);
+      if (!refreshed) {
+        error = 'This connection has changed or is no longer configured. Return to Connections and select a profile.';
+        return;
+      }
+      await openDatabase(refreshed);
+    } catch (cause) {
+      if (selectedConnection === previous && requestId === databaseRequestId) error = cause instanceof Error ? cause.message : 'Could not reconnect';
+    } finally { reconnecting = false; }
+  }
+
+  function showConnections() {
+    databaseRequestId++;
+    rowsRequestId++;
+    definitionRequestId++;
+    selectedConnection = null;
+    selectedObject = null;
+    rowsPage = null;
+    databaseLoading = false;
+    rowsLoading = false;
+    definitionLoading = false;
+    pendingPageControl = null;
+    void loadConnections();
   }
 
   function selectSection(type: ObjectType) {
@@ -178,20 +219,22 @@
   }
 
   async function disconnect() {
-    if (!selectedConnection) return;
-    rowsRequestId += 1;
+    const connection = selectedConnection;
+    if (!connection) return;
+    const requestId = ++databaseRequestId;
+    rowsRequestId++;
+    definitionRequestId++;
+    databaseLoading = false;
     rowsLoading = false;
+    definitionLoading = false;
     pendingPageControl = null;
     try {
-      const closed = await request<Connection>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/disconnect`, { method: 'POST' });
+      const closed = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/disconnect`, { method: 'POST' });
+      if (requestId !== databaseRequestId) return;
       connections = connections.map((item) => item.id === closed.id ? closed : item);
-      selectedConnection = null;
-      selectedTable = '';
-      selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = '';
-      rowsPage = null;
-      error = '';
+      showConnections();
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Could not disconnect from the database';
+      if (requestId === databaseRequestId) error = cause instanceof Error ? cause.message : 'Could not disconnect from the database';
     }
   }
 
@@ -227,7 +270,7 @@
   "port": 3306,
   "user": "database_user",
   "database": "database_name",
-  "environment": "dev",
+  "readonly": false,
   "password": "paste-password-here"
 }`}</code></pre>
   </div>
@@ -284,8 +327,8 @@
         <div class="workspace-main">
         {#if activeObjectType === 'table'}
           <div class="table-main">
-            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<p>{error}</p>{:else if rowsPage}<table class="data-grid" inert={databaseLoading || rowsLoading}><thead><tr>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}<th class="actions-head">Actions</th></tr></thead><tbody>{#each pagedRows as row}<tr>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}<td class="row-actions"><button class="edit-row" aria-label="Edit row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Edit row'}><Pencil size={16} /></button><button class="delete-row" aria-label="Delete row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Delete row'}><Trash2 size={16} /></button></td></tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || (rowsLoading && pendingPageControl === null)}<div class="grid-loading" role="status"><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
-            <footer class="grid-footer"><span>Showing <strong>{rowsPage && rowsPage.totalRows > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, rowsPage.totalRows)} of ${rowsPage.totalRows}` : '0 of 0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page" disabled={rowsLoading || databaseLoading} bind:value={pageSize} onchange={() => void selectTable(selectedTable, 1)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><span class="grid-summary">Rows: <strong>{pagedRows.length}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination">{#if currentPage > 1}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage - 1, 'previous')} aria-label="Previous page" aria-busy={pendingPageControl === 'previous'}>{#if pendingPageControl === 'previous'}<span class="page-spinner" aria-hidden="true"></span>{:else}‹{/if}</button>{/if}{#each pageItems as page, index}{#if index > 0 && page > pageItems[index - 1] + 1}<span class="pagination-ellipsis">…</span>{/if}{#if currentPage === page}<span class="active" aria-current="page" aria-label={`Page ${page}`}>{page}</span>{:else}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, page, page)} aria-label={`Page ${page}`} aria-busy={pendingPageControl === page}>{#if pendingPageControl === page}<span class="page-spinner" aria-hidden="true"></span>{:else}{page}{/if}</button>{/if}{/each}{#if currentPage < totalPages}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage + 1, 'next')} aria-label="Next page" aria-busy={pendingPageControl === 'next'}>{#if pendingPageControl === 'next'}<span class="page-spinner" aria-hidden="true"></span>{:else}›{/if}</button>{/if}</span></footer>
+            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<DataError message={error} busy={reconnecting} reconnect={() => void reconnectDatabase()} back={showConnections} />{:else if rowsPage}<table class="data-grid" inert={databaseLoading || rowsLoading}><thead><tr>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}<th class="actions-head">Actions</th></tr></thead><tbody>{#each pagedRows as row}<tr>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}<td class="row-actions"><button class="edit-row" aria-label="Edit row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Edit row'}><Pencil size={16} /></button><button class="delete-row" aria-label="Delete row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Delete row'}><Trash2 size={16} /></button></td></tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || (rowsLoading && pendingPageControl === null)}<div class="grid-loading" role="status"><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
+            {#if !error}<footer class="grid-footer"><span>Showing <strong>{rowsPage && rowsPage.totalRows > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, rowsPage.totalRows)} of ${rowsPage.totalRows}` : '0 of 0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page" disabled={rowsLoading || databaseLoading} bind:value={pageSize} onchange={() => void selectTable(selectedTable, 1)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><span class="grid-summary">Rows: <strong>{pagedRows.length}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination">{#if currentPage > 1}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage - 1, 'previous')} aria-label="Previous page" aria-busy={pendingPageControl === 'previous'}>{#if pendingPageControl === 'previous'}<span class="page-spinner" aria-hidden="true"></span>{:else}‹{/if}</button>{/if}{#each pageItems as page, index}{#if index > 0 && page > pageItems[index - 1] + 1}<span class="pagination-ellipsis">…</span>{/if}{#if currentPage === page}<span class="active" aria-current="page" aria-label={`Page ${page}`}>{page}</span>{:else}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, page, page)} aria-label={`Page ${page}`} aria-busy={pendingPageControl === page}>{#if pendingPageControl === page}<span class="page-spinner" aria-hidden="true"></span>{:else}{page}{/if}</button>{/if}{/each}{#if currentPage < totalPages}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage + 1, 'next')} aria-label="Next page" aria-busy={pendingPageControl === 'next'}>{#if pendingPageControl === 'next'}<span class="page-spinner" aria-hidden="true"></span>{:else}›{/if}</button>{/if}</span></footer>{/if}
           </div>
         {:else}
           <section class="object-main" aria-label={`${objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'} details`}>
@@ -353,7 +396,7 @@
                 <span class="connection-meta" title="Database"><Database size={14} /><span>{connection.database}</span></span>
                 <span class="connection-meta" title="Database size"><HardDrive size={14} /><span>{formatBytes(connection.databaseSizeBytes)}</span></span>
                 <span class="connection-meta connection-time" title="Last connection"><Clock size={14} /><span>{formatDate(connection.lastConnectedAt)}</span></span>
-                {#if connection.readOnly}<span class="connection-readonly" title="Production · read-only"><ShieldCheck size={14} /> Prod</span>{/if}
+                {#if connection.readonly}<span class="connection-readonly" title="Read-only connection"><ShieldCheck size={14} /> Read only</span>{/if}
                 <span class:connected={connection.connected} class="preview-badge"><span></span>{connection.connected ? 'Connected' : 'Disconnected'}</span>
               </div>
             </button>

@@ -43,13 +43,6 @@ const (
 	DatabaseObjectTypeView      DatabaseObjectType = "view"
 )
 
-// Defines values for Environment.
-const (
-	Dev   Environment = "dev"
-	Prod  Environment = "prod"
-	Stage Environment = "stage"
-)
-
 // Defines values for FilterOp.
 const (
 	Eq      FilterOp = "eq"
@@ -150,14 +143,15 @@ type Connection struct {
 	// DatabaseSizeBytes Database size in bytes; null when unavailable
 	DatabaseSizeBytes *int64           `json:"databaseSizeBytes"`
 	Driver            ConnectionDriver `json:"driver"`
-	Environment       Environment      `json:"environment"`
 	Host              string           `json:"host"`
 	Id                string           `json:"id"`
 	LastConnectedAt   *time.Time       `json:"lastConnectedAt"`
 	Name              string           `json:"name"`
 	Port              int              `json:"port"`
-	ReadOnly          bool             `json:"readOnly"`
-	User              string           `json:"user"`
+
+	// Readonly Whether this connection is restricted to read-only operations
+	Readonly bool   `json:"readonly"`
+	User     string `json:"user"`
 }
 
 // ConnectionDriver defines model for Connection.Driver.
@@ -165,14 +159,16 @@ type ConnectionDriver string
 
 // ConnectionInput defines model for ConnectionInput.
 type ConnectionInput struct {
-	Database    string                `json:"database"`
-	Driver      ConnectionInputDriver `json:"driver"`
-	Environment Environment           `json:"environment"`
-	Host        string                `json:"host"`
-	Name        string                `json:"name"`
-	Password    *string               `json:"password,omitempty"`
-	Port        int                   `json:"port"`
-	User        string                `json:"user"`
+	Database string                `json:"database"`
+	Driver   ConnectionInputDriver `json:"driver"`
+	Host     string                `json:"host"`
+	Name     string                `json:"name"`
+	Password *string               `json:"password,omitempty"`
+	Port     int                   `json:"port"`
+
+	// Readonly Restrict the connection to read-only operations; defaults to true when omitted
+	Readonly *bool  `json:"readonly,omitempty"`
+	User     string `json:"user"`
 }
 
 // ConnectionInputDriver defines model for ConnectionInput.Driver.
@@ -192,12 +188,11 @@ type DatabaseObject struct {
 // DatabaseObjectType defines model for DatabaseObject.Type.
 type DatabaseObjectType string
 
-// Environment defines model for Environment.
-type Environment string
-
 // Error defines model for Error.
 type Error struct {
-	Code    string `json:"code"`
+	Code string `json:"code"`
+
+	// Message Reported database or driver error text for database failures; displayed directly without a generic replacement
 	Message string `json:"message"`
 }
 

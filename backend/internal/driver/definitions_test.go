@@ -11,10 +11,11 @@ import (
 )
 
 type definitionConnector struct {
-	columns []string
-	values  []sqldriver.Value
-	query   string
-	err     error
+	columns      []string
+	values       []sqldriver.Value
+	query        string
+	err          error
+	metadataOnly bool
 }
 
 func (c *definitionConnector) Connect(context.Context) (sqldriver.Conn, error) {
@@ -35,6 +36,9 @@ func (c *definitionConn) Close() error                 { return nil }
 func (c *definitionConn) Begin() (sqldriver.Tx, error) { return nil, errors.New("not supported") }
 func (c *definitionConn) QueryContext(_ context.Context, query string, _ []sqldriver.NamedValue) (sqldriver.Rows, error) {
 	c.c.query = query
+	if c.c.metadataOnly && !strings.Contains(query, ".nichosi_account_metadata") {
+		return &definitionRows{read: true}, nil
+	}
 	if c.c.err != nil {
 		return nil, c.c.err
 	}
@@ -119,9 +123,23 @@ func TestMySQLObjectDefinitionAvailability(t *testing.T) {
 			if (connector.query != "") != tc.wantQuery {
 				t.Fatalf("unexpected query: %s", connector.query)
 			}
-			if !tc.wantError && (object.Definition != "" || object.Details["Definition status"] == "" || strings.Contains(object.Details["Definition status"], "sensitive data")) {
-				t.Fatalf("unsafe unavailable response: %+v", object)
+			if !tc.wantError && (object.Definition != "" || object.Details["Definition status"] != connector.err.Error()) {
+				t.Fatalf("database error was not preserved: %+v", object)
 			}
 		})
+	}
+}
+
+func TestMySQLAccountMetadataErrorIsPreserved(t *testing.T) {
+	source := errors.New("Error 1142: SELECT denied\n<account metadata>")
+	connector := &definitionConnector{err: source, metadataOnly: true}
+	db := sql.OpenDB(connector)
+	defer db.Close()
+	_, warnings, err := MySQLObjects(context.Background(), db, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 1 || warnings[0] != source.Error() {
+		t.Fatalf("warning does not preserve the database error: %v", warnings)
 	}
 }

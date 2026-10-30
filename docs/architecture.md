@@ -25,7 +25,7 @@ type Driver interface {
 ```
 
 ## Features
-- Connections: profiles, env tag (dev/stage/prod), prod read-only by default, SSH tunnel, TLS, cancel query.
+- Connections: profiles, explicit readonly boolean (true by default), SSH tunnel, TLS, cancel query.
 - Editing: virtualized grid, keyset pagination, ChangeSet (preview SQL, one transaction), PK-only editing.
 - Relations: real FKs, inferred links by naming plus data check (orphan ratio), manual links; graph depth 1-3.
 - Statistics: table sizes, column profile (sampled), unused/duplicate indexes, processlist, slow queries.

@@ -33,7 +33,7 @@ func MySQLObjects(ctx context.Context, db *sql.DB, database string) ([]Object, [
 	for _, q := range queries {
 		rows, err := db.QueryContext(ctx, q.query, q.args...)
 		if err != nil && q.kind == "account" {
-			warnings = append(warnings, "Users and roles unavailable: ask an administrator to install the safe nichosi_account_metadata view.")
+			warnings = append(warnings, err.Error())
 			continue
 		}
 		if err != nil {
@@ -111,11 +111,10 @@ func MySQLObjectDefinition(ctx context.Context, db *sql.DB, database, kind, name
 	}
 	if err := mysqlObjectDefinition(ctx, db, database, &object); err != nil {
 		if ctx.Err() != nil {
-			return object, fmt.Errorf("read object definition: %w", ctx.Err())
+			return object, err
 		}
-		// Do not expose server errors, which may contain sensitive SQL.
 		object.Definition = ""
-		object.Details["Definition status"] = "Full CREATE statement unavailable; the object may have changed or the account lacks permission"
+		object.Details["Definition status"] = err.Error()
 	}
 	return object, nil
 }

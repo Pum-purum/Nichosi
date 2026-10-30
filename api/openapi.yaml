@@ -120,6 +120,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RowsPage" }
+        "404":
+          description: Connection not found, or table metadata was read successfully and the table does not exist.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: Database access or metadata query failed. Query failures must not be reported as a missing table.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /api/connections/{connId}/tables/{table}/changes/preview:
     post:
@@ -217,13 +227,10 @@ components:
       required: [code, message]
       properties:
         code: { type: string }
-        message: { type: string }
-    Environment:
-      type: string
-      enum: [dev, stage, prod]
+        message: { type: string, description: "Reported database or driver error text for database failures; displayed directly without a generic replacement" }
     Connection:
       type: object
-      required: [id, name, driver, host, port, user, database, environment, readOnly, connected, databaseSizeBytes, lastConnectedAt]
+      required: [id, name, driver, host, port, user, database, readonly, connected, databaseSizeBytes, lastConnectedAt]
       properties:
         id: { type: string }
         name: { type: string }
@@ -232,14 +239,13 @@ components:
         port: { type: integer }
         user: { type: string }
         database: { type: string }
-        environment: { $ref: "#/components/schemas/Environment" }
-        readOnly: { type: boolean }
+        readonly: { type: boolean, description: "Whether this connection is restricted to read-only operations" }
         connected: { type: boolean, description: "Whether the application currently holds an open database connection" }
         databaseSizeBytes: { type: integer, format: int64, nullable: true, description: "Database size in bytes; null when unavailable" }
         lastConnectedAt: { type: string, format: date-time, nullable: true }
     ConnectionInput:
       type: object
-      required: [name, driver, host, port, user, password, database, environment]
+      required: [name, driver, host, port, user, password, database]
       properties:
         name: { type: string }
         driver: { type: string, enum: [mysql, postgres, sqlite] }
@@ -248,7 +254,7 @@ components:
         user: { type: string }
         password: { type: string, writeOnly: true }
         database: { type: string }
-        environment: { $ref: "#/components/schemas/Environment" }
+        readonly: { type: boolean, default: true, description: "Restrict the connection to read-only operations; defaults to true when omitted" }
     ForeignRef:
       type: object
       required: [table, column]

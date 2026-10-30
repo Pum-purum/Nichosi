@@ -208,10 +208,9 @@ export interface components {
         };
         Error: {
             code: string;
+            /** @description Reported database or driver error text for database failures; displayed directly without a generic replacement */
             message: string;
         };
-        /** @enum {string} */
-        Environment: "dev" | "stage" | "prod";
         Connection: {
             id: string;
             name: string;
@@ -221,8 +220,8 @@ export interface components {
             port: number;
             user: string;
             database: string;
-            environment: components["schemas"]["Environment"];
-            readOnly: boolean;
+            /** @description Whether this connection is restricted to read-only operations */
+            readonly: boolean;
             /** @description Whether the application currently holds an open database connection */
             connected: boolean;
             /**
@@ -242,7 +241,11 @@ export interface components {
             user: string;
             password: string;
             database: string;
-            environment: components["schemas"]["Environment"];
+            /**
+             * @description Restrict the connection to read-only operations; defaults to true when omitted
+             * @default true
+             */
+            readonly: boolean;
         };
         ForeignRef: {
             table: string;
@@ -597,6 +600,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RowsPage"];
+                };
+            };
+            /** @description Connection not found, or table metadata was read successfully and the table does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Database access or metadata query failed. Query failures must not be reported as a missing table. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];

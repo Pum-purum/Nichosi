@@ -37,7 +37,7 @@ Run the following commands from the `Nichosi` folder.
          "port": 3306,
          "user": "database_user",
          "database": "database_name",
-         "environment": "dev",
+         "readonly": false,
          "password": "your-password"
        }
      ]
@@ -46,7 +46,12 @@ Run the following commands from the `Nichosi` folder.
 
    `host` must be an address the Docker container can reach. If your database runs in another container, use that container's service name and make sure both containers share a Docker network. If it runs on your computer, `host.docker.internal` usually works with Docker Desktop; on Linux, configure a host address that is reachable from Docker.
 
-   You can add more database objects to the `connections` array. Use `"environment": "prod"` for production connections; Nichosi treats those connections as read-only.
+   You can add more connection profiles to the `connections` array. Set `"readonly": true`
+   to restrict a connection to read-only operations, or `"readonly": false` to opt out of
+   that restriction. The value must be a JSON boolean, not a string. If omitted, it
+   defaults to `true`. The old `environment` field is no longer used; replace it with
+   an explicit `readonly` value (`true` for former `prod` profiles). The API uses the
+   same `readonly` name in connection inputs and responses.
 
 3. Build and start Nichosi:
 

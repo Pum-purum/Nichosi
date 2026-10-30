@@ -94,6 +94,20 @@ For local integration tests, set `NICHOSI_TEST_DSN` through the environment and 
 
 The table view omits the unfinished row-filter and column-visibility controls,
 read-only banner and toolbar divider. Edit and Delete row buttons are disabled
-when the connection is read-only or the RowsPage editable flag is false. Their
+when the connection readonly flag is true or the RowsPage editable flag is false. Their
 tooltips explain the restriction, including the server-provided readOnlyReason
 when available. Object-name filtering in the sidebar remains available.
+
+Table-loading failures show a centered error panel with Reconnect and Connections
+actions, and the reported database or driver error text immediately visible
+in a monospace block. Database failures retain their source error message instead
+of a generic replacement; line breaks are preserved and HTML is displayed as text. Reconnect reloads the connection profiles
+first to recover IDs changed by a server restart. It reconnects only to an exact
+profile match (name, driver, host, port, user and database); missing or ambiguous
+profiles require choosing a connection again. Pagination is hidden while an error
+is shown. Returning to Connections cancels pending UI updates.
+
+A failed table-existence query returns HTTP 502 (metadata_failed), including when
+the database server is stopped or metadata permissions are missing. Table not
+found (HTTP 404, table_not_found) is returned only after a successful metadata
+query reports zero matching tables. The reported database/driver error text is returned in the error message.

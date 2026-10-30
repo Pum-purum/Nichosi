@@ -34,14 +34,14 @@ type connectionsConfig struct {
 }
 
 type connectionConfig struct {
-	Name        string `json:"name"`
-	Driver      string `json:"driver"`
-	Host        string `json:"host"`
-	Port        int    `json:"port"`
-	User        string `json:"user"`
-	Database    string `json:"database"`
-	Environment string `json:"environment"`
-	Password    string `json:"password"`
+	Name     string `json:"name"`
+	Driver   string `json:"driver"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Database string `json:"database"`
+	Readonly *bool  `json:"readonly"`
+	Password string `json:"password"`
 }
 
 type app struct {
@@ -128,7 +128,7 @@ func (a *app) createConnection(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	item, err := a.openMySQLConnection(ctx, input)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "connection_failed", "Could not connect or read database metadata. Check the connection details.")
+		writeError(w, http.StatusBadGateway, "connection_failed", err.Error())
 		return
 	}
 	a.mu.Lock()
@@ -161,12 +161,14 @@ func (a *app) connectConnection(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		opened, err := a.openMySQLConnection(ctx, item.input)
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "connection_failed", "Could not reconnect to the database. Check that it is available.")
+			writeError(w, http.StatusBadGateway, "connection_failed", err.Error())
 			return
 		}
 		item.pool = opened.pool
 		item.DatabaseSizeBytes = opened.DatabaseSizeBytes
 		item.LastConnectedAt = opened.LastConnectedAt
+		item.Readonly = opened.Readonly
+		item.input.Readonly = opened.input.Readonly
 	}
 	item.Connected = true
 	writeJSON(w, http.StatusOK, item.Connection)
@@ -182,7 +184,7 @@ func (a *app) disconnectConnection(w http.ResponseWriter, r *http.Request) {
 	defer item.mu.Unlock()
 	if item.pool != nil {
 		if err := item.pool.Close(); err != nil {
-			writeError(w, http.StatusBadGateway, "disconnect_failed", "Could not close the database connection")
+			writeError(w, http.StatusBadGateway, "disconnect_failed", err.Error())
 			return
 		}
 		item.pool = nil
@@ -207,7 +209,7 @@ func (a *app) getSchema(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	rows, err := item.pool.QueryContext(ctx, "SELECT TABLE_NAME, COALESCE(TABLE_ROWS,0), COALESCE(DATA_LENGTH,0), COALESCE(INDEX_LENGTH,0) FROM information_schema.tables WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME", item.Database)
 	if err != nil {
-		writeError(w, 502, "metadata_failed", "Could not read database tables")
+		writeError(w, 502, "metadata_failed", err.Error())
 		return
 	}
 	defer rows.Close()
@@ -215,36 +217,47 @@ func (a *app) getSchema(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var table TableInfo
 		if err := rows.Scan(&table.Name, &table.RowsEstimate, &table.DataBytes, &table.IndexBytes); err != nil {
-			writeError(w, 502, "metadata_failed", "Could not read database tables")
+			writeError(w, 502, "metadata_failed", err.Error())
 			return
 		}
 		table.Columns = []Column{}
 		schema.Tables = append(schema.Tables, table)
 	}
-	if rows.Err() != nil {
-		writeError(w, 502, "metadata_failed", "Could not read database tables")
+	if err := rows.Err(); err != nil {
+		writeError(w, 502, "metadata_failed", err.Error())
 		return
 	}
 	for i := range schema.Tables {
 		columns, err := item.pool.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", item.Database, schema.Tables[i].Name)
 		if err != nil {
-			writeError(w, 502, "metadata_failed", "Could not read table columns")
+			writeError(w, 502, "metadata_failed", err.Error())
 			return
 		}
 		for columns.Next() {
 			var c Column
 			var nullable, key string
-			if columns.Scan(&c.Name, &c.Type, &nullable, &key) == nil {
-				c.Nullable = nullable == "YES"
-				c.PrimaryKey = key == "PRI"
-				schema.Tables[i].Columns = append(schema.Tables[i].Columns, c)
+			if err := columns.Scan(&c.Name, &c.Type, &nullable, &key); err != nil {
+				columns.Close()
+				writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
+				return
 			}
+			c.Nullable = nullable == "YES"
+			c.PrimaryKey = key == "PRI"
+			schema.Tables[i].Columns = append(schema.Tables[i].Columns, c)
 		}
-		columns.Close()
+		if err := columns.Err(); err != nil {
+			columns.Close()
+			writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
+			return
+		}
+		if err := columns.Close(); err != nil {
+			writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
+			return
+		}
 	}
 	objects, warnings, err := driver.MySQLObjects(ctx, item.pool, item.Database)
 	if err != nil {
-		writeError(w, 502, "metadata_failed", "Could not read database objects.")
+		writeError(w, 502, "metadata_failed", err.Error())
 		return
 	}
 	schema.Warnings = &warnings
@@ -283,7 +296,7 @@ func (a *app) getObjectDefinition(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	object, err := driver.MySQLObjectDefinition(ctx, item.pool, item.Database, kind, name)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "metadata_failed", "Could not read object definition")
+		writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, DatabaseObject{Name: object.Name, Type: DatabaseObjectType(object.Type), Definition: &object.Definition, Details: &object.Details})
@@ -307,8 +320,12 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	var exists int
-	if err := item.pool.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND TABLE_TYPE = 'BASE TABLE'", item.Database, table).Scan(&exists); err != nil || exists == 0 {
-		writeError(w, 404, "table_not_found", "Table not found")
+	if err := item.pool.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND TABLE_TYPE = 'BASE TABLE'", item.Database, table).Scan(&exists); err != nil {
+		writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
+		return
+	}
+	if exists == 0 {
+		writeError(w, http.StatusNotFound, "table_not_found", "Table not found")
 		return
 	}
 	var query RowsQuery
@@ -333,26 +350,31 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	}
 	cols, err := item.pool.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", item.Database, table)
 	if err != nil {
-		writeError(w, 502, "metadata_failed", "Could not read table columns")
+		writeError(w, 502, "metadata_failed", err.Error())
 		return
 	}
 	defer cols.Close()
 	page := RowsPage{Columns: []Column{}, Rows: [][]interface{}{}, Editable: false}
 	if err := item.pool.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+quoteMySQLIdent(table)).Scan(&page.TotalRows); err != nil {
-		writeError(w, 502, "count_failed", "Could not count table rows")
+		writeError(w, 502, "count_failed", err.Error())
 		return
 	}
 	names := []string{}
 	for cols.Next() {
 		var c Column
 		var nullable, key string
-		if cols.Scan(&c.Name, &c.Type, &nullable, &key) != nil {
-			continue
+		if err := cols.Scan(&c.Name, &c.Type, &nullable, &key); err != nil {
+			writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
+			return
 		}
 		c.Nullable = nullable == "YES"
 		c.PrimaryKey = key == "PRI"
 		page.Columns = append(page.Columns, c)
 		names = append(names, c.Name)
+	}
+	if err := cols.Err(); err != nil {
+		writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
+		return
 	}
 	if len(names) == 0 {
 		writeJSON(w, 200, page)
@@ -364,7 +386,7 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := item.pool.QueryContext(ctx, "SELECT "+strings.Join(selects, ",")+" FROM "+quoteMySQLIdent(table)+" LIMIT ? OFFSET ?", limit, offset)
 	if err != nil {
-		writeError(w, 502, "query_failed", "Could not read table rows")
+		writeError(w, 502, "query_failed", err.Error())
 		return
 	}
 	defer result.Close()
@@ -375,7 +397,7 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	}
 	for result.Next() {
 		if err := result.Scan(dest...); err != nil {
-			writeError(w, 502, "query_failed", "Could not read table rows")
+			writeError(w, 502, "query_failed", err.Error())
 			return
 		}
 		row := append([]interface{}(nil), values...)
@@ -386,8 +408,8 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 		}
 		page.Rows = append(page.Rows, row)
 	}
-	if result.Err() != nil {
-		writeError(w, 502, "query_failed", "Could not read table rows")
+	if err := result.Err(); err != nil {
+		writeError(w, 502, "query_failed", err.Error())
 		return
 	}
 	page.ReadOnlyReason = ptrString("Editing is not available yet")
@@ -417,14 +439,11 @@ func (a *app) loadConfiguredConnections() {
 			slog.Warn("skipping invalid connection profile", "name", saved.Name)
 			continue
 		}
-		environment := Environment(saved.Environment)
-		if environment != Environment("stage") && environment != Environment("prod") {
-			environment = Environment("dev")
-		}
+		readonly := connectionReadonly(saved.Readonly)
 		input := ConnectionInput{
 			Name: saved.Name, Driver: ConnectionInputDriver(saved.Driver), Host: saved.Host,
 			Port: saved.Port, User: saved.User, Password: &saved.Password,
-			Database: saved.Database, Environment: environment,
+			Database: saved.Database, Readonly: &readonly,
 		}
 		name := strings.TrimSpace(saved.Name)
 		if name == "" {
@@ -432,21 +451,23 @@ func (a *app) loadConfiguredConnections() {
 		}
 		a.connections = append(a.connections, &profile{
 			Connection: Connection{
-				Id:          fmt.Sprintf("conn-%d", time.Now().UTC().UnixNano()),
-				Name:        name,
-				Driver:      ConnectionDriver("mysql"),
-				Host:        saved.Host,
-				Port:        saved.Port,
-				User:        saved.User,
-				Database:    saved.Database,
-				Environment: environment,
-				ReadOnly:    environment == Environment("prod"),
-				Connected:   false,
+				Id:        fmt.Sprintf("conn-%d", time.Now().UTC().UnixNano()),
+				Name:      name,
+				Driver:    ConnectionDriver("mysql"),
+				Host:      saved.Host,
+				Port:      saved.Port,
+				User:      saved.User,
+				Database:  saved.Database,
+				Readonly:  readonly,
+				Connected: false,
 			},
 			input: input,
 		})
 	}
 }
+
+// connectionReadonly defaults both omitted and null settings to read-only.
+func connectionReadonly(value *bool) bool { return value == nil || *value }
 
 func (a *app) openMySQLConnection(ctx context.Context, input ConnectionInput) (*profile, error) {
 	cfg := mysql.NewConfig()
@@ -474,11 +495,9 @@ func (a *app) openMySQLConnection(ctx context.Context, input ConnectionInput) (*
 	if name == "" {
 		name = input.Database
 	}
-	environment := input.Environment
-	if environment != Environment("stage") && environment != Environment("prod") {
-		environment = Environment("dev")
-	}
-	return &profile{Connection: Connection{Id: fmt.Sprintf("conn-%d", now.UnixNano()), Name: name, Driver: ConnectionDriver("mysql"), Host: input.Host, Port: input.Port, User: input.User, Database: input.Database, Environment: environment, ReadOnly: environment == Environment("prod"), Connected: true, DatabaseSizeBytes: &size, LastConnectedAt: &now}, pool: pool, input: input}, nil
+	readonly := connectionReadonly(input.Readonly)
+	input.Readonly = &readonly
+	return &profile{Connection: Connection{Id: fmt.Sprintf("conn-%d", now.UnixNano()), Name: name, Driver: ConnectionDriver("mysql"), Host: input.Host, Port: input.Port, User: input.User, Database: input.Database, Readonly: readonly, Connected: true, DatabaseSizeBytes: &size, LastConnectedAt: &now}, pool: pool, input: input}, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
