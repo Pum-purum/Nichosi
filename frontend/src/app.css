@@ -14,6 +14,12 @@
   --muted: #a2a6a2;
   --dim: #747a76;
   --accent: #83c96f;
+  --sql-keyword: #86afff;
+  --sql-string: #9ecb8c;
+  --sql-number: #c9a3e8;
+  --sql-comment: #9aa69e;
+  --sql-builtin: #87bce8;
+  --sql-variable: #e7ca8c;
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   scrollbar-color: #596164 #222628;
   scrollbar-width: thin;

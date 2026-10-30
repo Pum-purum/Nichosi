@@ -1,11 +1,13 @@
 <script lang="ts">
   import { Copy, Check } from '@lucide/svelte';
   import { formatDefinition } from './sql-definition';
+  import { highlightSQL } from './sql-highlight';
 
   let { definition, name, sqlMode }: { definition: string; name: string; sqlMode?: string } = $props();
   let showOriginal = $state(false);
   const formatted = $derived(formatDefinition(definition, sqlMode));
   const displayedSQL = $derived(showOriginal ? definition : formatted.sql);
+  const highlightedSQL = $derived(highlightSQL(displayedSQL));
   let copied = $state(false);
   let copyError = $state('');
   let copyAttempt = 0;
@@ -35,7 +37,7 @@
   <div class="definition-code">
     <div class="definition-lines" aria-hidden="true">{displayedSQL.split('\n').map((_, index) => index + 1).join('\n')}</div>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex (Scrollable SQL needs keyboard access.) -->
-    <pre role="region" tabindex="0" aria-label={`SQL definition of ${name}`}><code>{displayedSQL}</code></pre>
+    <pre role="region" tabindex="0" aria-label={`SQL definition of ${name}`}><code class="language-sql">{@html highlightedSQL}</code></pre>
   </div>
   {#if !showOriginal && !formatted.formatted}
     <p class="definition-feedback">Formatting is unavailable for this syntax. Showing the original SQL.</p>
@@ -56,6 +58,12 @@
   .definition-lines { flex: none; color: #8e9892; text-align: right; border-right: 1px solid #373d39; user-select: none; }
   pre { flex: 1; min-width: 0; overflow: auto; color: #e5e7e4; }
   code { font: inherit; }
+  code :global(.hljs-keyword), code :global(.hljs-operator) { color: var(--sql-keyword); }
+  code :global(.hljs-string) { color: var(--sql-string); }
+  code :global(.hljs-number), code :global(.hljs-literal) { color: var(--sql-number); }
+  code :global(.hljs-comment) { color: var(--sql-comment); font-style: italic; }
+  code :global(.hljs-type), code :global(.hljs-built_in) { color: var(--sql-builtin); }
+  code :global(.hljs-variable), code :global(.hljs-symbol) { color: var(--sql-variable); }
   .definition-feedback { margin: 8px 0 0; color: #c6cdc8; font-size: 12px; }
   .definition-feedback:empty { display: none; }
 </style>

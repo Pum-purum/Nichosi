@@ -3,9 +3,14 @@
 The object browser lists views, triggers, procedures, functions, scheduled events,
 roles and users. Select a category and an object to inspect its full CREATE statement.
 The detail panel focuses on SQL, without a separate metadata grid. The read-only code viewer includes line numbers, horizontal scrolling
-and a Copy SQL action. SQL is displayed with local whitespace formatting by
+and a Copy SQL action. Highlight.js supplies local SQL syntax highlighting for
+keywords, strings, numbers, comments and built-in types/functions, using the
+core and SQL grammar only. The library is bundled with the application; no CDN
+or runtime network request is used. Copy SQL always copies plain SQL text. SQL keywords and operators use a fixed blue accent. SQL is displayed with local whitespace formatting by
 default: DDL clauses, event schedules and statement bodies use separate lines,
-and BEGIN blocks are indented. Quoted strings, identifiers and comments are
+and related clauses are indented by two spaces per level. Schedule details nest
+under ON SCHEDULE, event statements nest under DO, query expressions nest under
+SELECT/FROM/WHERE/SET, and nested BEGIN blocks and subqueries gain their own level. Quoted strings, identifiers and comments are
 protected from keyword formatting. Original SQL switches to the exact server
 text; Copy SQL copies the currently displayed version. Incomplete quoted text
 or comments fall back to the original definition. Backslash-containing strings
