@@ -253,3 +253,8 @@ export function compactDefinition(sql: string, sqlMode?: string): string {
   }
   return result;
 }
+
+/** Omit the default algorithm from the canonical SHOW CREATE VIEW header only. */
+export function simplifyViewDefinition(sql: string): string {
+  return sql.replace(/^(\s*CREATE\s+(?:OR\s+REPLACE\s+)?)ALGORITHM\s*=\s*UNDEFINED\b\s+/i, '$1');
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compactDefinition, formatDefinition } from './sql-definition';
+import { compactDefinition, formatDefinition, simplifyViewDefinition } from './sql-definition';
 
 describe('SQL definition formatting', () => {
   it('separates event schedule, options and body into readable lines', () => {
@@ -175,5 +175,31 @@ describe('SQL clipboard compaction', () => {
     expect(compactDefinition("SELECT 'line 1\nline 2';")).toBe("SELECT 'line 1\nline 2';");
     const source = String.raw`SELECT 'a\' FROM t`;
     expect(compactDefinition(source)).toBe(source);
+  });
+});
+
+
+describe('View definition defaults', () => {
+  it('omits the undefined algorithm from the CREATE VIEW header', () => {
+    expect(simplifyViewDefinition('CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW v AS SELECT 1'))
+      .toBe('CREATE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW v AS SELECT 1');
+    expect(simplifyViewDefinition('create or replace algorithm = undefined\nVIEW v AS SELECT 1'))
+      .toBe('create or replace VIEW v AS SELECT 1');
+  });
+
+  it('preserves explicit algorithms and text in the view body', () => {
+    for (const algorithm of ['MERGE', 'TEMPTABLE']) {
+      const source = `CREATE ALGORITHM=${algorithm} VIEW v AS SELECT 1`;
+      expect(simplifyViewDefinition(source)).toBe(source);
+    }
+    const source = "CREATE VIEW v AS SELECT 'ALGORITHM=UNDEFINED' AS `ALGORITHM=UNDEFINED`";
+    expect(simplifyViewDefinition(source)).toBe(source);
+    expect(simplifyViewDefinition('CREATE ALGORITHM=UNDEFINED_SUFFIX VIEW v AS SELECT 1')).toContain('UNDEFINED_SUFFIX');
+  });
+
+  it('uses the same simplified definition for display and compact copying', () => {
+    const script = simplifyViewDefinition("CREATE ALGORITHM=UNDEFINED VIEW v AS SELECT 'ALGORITHM=UNDEFINED'");
+    expect(formatDefinition(script).sql).toContain('CREATE VIEW v AS');
+    expect(compactDefinition(script)).toBe("CREATE VIEW v AS SELECT 'ALGORITHM=UNDEFINED'");
   });
 });

@@ -27,7 +27,9 @@ and filtering use the plain account name and host (for example, root@localhost),
 without SQL quoting. Object identity and SQL definitions retain their original quoting.
 Definitions for views, triggers, procedures, functions and events come from
 `SHOW CREATE`, preserving the server-reported declaration, parameters, definer,
-schedule, options and body rather than displaying only the body. This is the
+schedule, options and body rather than displaying only the body. For view display and copying, the default `ALGORITHM=UNDEFINED` clause is
+omitted from the CREATE header; explicit MERGE/TEMPTABLE algorithms are retained.
+The API still returns the unmodified server definition. This is the
 server's current definition, not a record of the original SQL text or subsequent
 ALTER statements. When access is denied, an
 object disappears, or a definition is hidden, the object remains listed with an
@@ -53,6 +55,14 @@ cannot be established from these metadata. Renamed or third-party service
 accounts are not automatically recognized. These badges do not inspect effective
 privileges and do not represent MySQL's `SYSTEM_USER` account category, which is
 based on privileges and may also apply to manually created accounts.
+
+User detail panels show the raw account name and host pattern, account lock
+state, recognized account category and server-wide scope. Not locked does not
+guarantee login: authentication and privilege checks still apply. Unknown lock
+state is displayed explicitly. Category labels do not establish account creation
+history or effective privileges. Role assignments are not available in the
+current safe metadata view and are not inferred. No additional database queries
+or authentication fields are needed for these panels.
 
 A MySQL role is a named collection of privileges that can be granted to user
 accounts or other roles. Roles and login users share account infrastructure;
@@ -81,3 +91,9 @@ The account creating the view must retain permission to read that system table.
 
 For local integration tests, set `NICHOSI_TEST_DSN` through the environment and run
 `go test ./internal/driver` from `backend/`. Tests skip when no local DSN is set.
+
+The table view omits the unfinished row-filter and column-visibility controls,
+read-only banner and toolbar divider. Edit and Delete row buttons are disabled
+when the connection is read-only or the RowsPage editable flag is false. Their
+tooltips explain the restriction, including the server-provided readOnlyReason
+when available. Object-name filtering in the sidebar remains available.

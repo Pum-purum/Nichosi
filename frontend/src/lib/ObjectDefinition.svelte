@@ -1,10 +1,11 @@
 <script lang="ts">
   import { Copy, Check } from '@lucide/svelte';
-  import { compactDefinition, formatDefinition } from './sql-definition';
+  import { compactDefinition, formatDefinition, simplifyViewDefinition } from './sql-definition';
   import { highlightSQL } from './sql-highlight';
 
-  let { definition, name, sqlMode }: { definition: string; name: string; sqlMode?: string } = $props();
-  const formatted = $derived(formatDefinition(definition, sqlMode));
+  let { definition, name, sqlMode, isView = false }: { definition: string; name: string; sqlMode?: string; isView?: boolean } = $props();
+  const script = $derived(isView ? simplifyViewDefinition(definition) : definition);
+  const formatted = $derived(formatDefinition(script, sqlMode));
   const displayedSQL = $derived(formatted.sql);
   const highlightedSQL = $derived(highlightSQL(displayedSQL));
   let copied = $state(false);
@@ -15,7 +16,7 @@
   async function copyDefinition() {
     const attempt = ++copyAttempt;
     try {
-      await navigator.clipboard.writeText(compactDefinition(definition, sqlMode));
+      await navigator.clipboard.writeText(compactDefinition(script, sqlMode));
       if (attempt === copyAttempt) { copied = true; copyError = ''; }
     } catch {
       if (attempt === copyAttempt) copyError = 'Could not copy SQL. Select the code and copy it manually.';
