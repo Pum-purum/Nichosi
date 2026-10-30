@@ -154,6 +154,15 @@
     }
   }
 
+  function objectDisplayName(object: DatabaseObject): string {
+    if (object.type === 'user' || object.type === 'role') {
+      const account = object.details?.['Account name'];
+      const host = object.details?.['Host'];
+      if (account !== undefined && host !== undefined) return `${account}@${host}`;
+    }
+    return object.name;
+  }
+
   function sectionCount(type: ObjectType) {
     return type === 'table' ? tables.length : objects.filter((object) => object.type === type).length;
   }
@@ -244,9 +253,9 @@
                   </button>
                 {/each}
               {:else}
-                {#each objects.filter((object) => object.type === activeObjectType && object.name.toLowerCase().includes(tableSearch.toLowerCase())) as object}
+                {#each objects.filter((object) => object.type === activeObjectType && objectDisplayName(object).toLowerCase().includes(tableSearch.toLowerCase())) as object}
                   <button class:active={selectedObject?.name === object.name} class="table-nav-item" aria-current={selectedObject?.name === object.name ? 'page' : undefined} onclick={() => selectObject(object)}>
-                    {#if activeObjectType === 'view'}<Eye size={17} />{:else if activeObjectType === 'trigger'}<Zap size={17} />{:else if activeObjectType === 'user'}<UserRound size={17} />{:else if activeObjectType === 'role'}<ShieldCheck size={17} />{:else if activeObjectType === 'event'}<Clock size={17} />{:else if activeObjectType === 'procedure'}<Braces size={17} />{:else}<Code2 size={17} />{/if}<span>{object.name}</span>
+                    {#if activeObjectType === 'view'}<Eye size={17} />{:else if activeObjectType === 'trigger'}<Zap size={17} />{:else if activeObjectType === 'user'}<UserRound size={17} />{:else if activeObjectType === 'role'}<ShieldCheck size={17} />{:else if activeObjectType === 'event'}<Clock size={17} />{:else if activeObjectType === 'procedure'}<Braces size={17} />{:else}<Code2 size={17} />{/if}<span>{objectDisplayName(object)}</span>
                   </button>
                 {/each}
               {/if}
@@ -272,16 +281,14 @@
             {#each metadataWarnings as warning}<p class="metadata-warning">{warning}</p>{/each}
             {#if selectedObject}
               <div class="object-detail-card">
-                <span class="object-detail-icon"><Database size={22} /></span>
-                <p>{objectSections.find((section) => section.type === activeObjectType)?.label}</p>
-                <h1>{selectedObject.name}</h1>
+                <h1>{objectDisplayName(selectedObject)}</h1>
                 {#if definitionLoading}
                   <p role="status">Loading SQL definition…</p>
                 {:else if definitionError}
                   <p role="alert">{definitionError}</p>
                   <button onclick={() => selectedObject && selectObject(selectedObject)}>Retry SQL definition</button>
                 {:else if selectedObject.definition}
-                  <ObjectDefinition definition={selectedObject.definition} name={selectedObject.name} sqlMode={selectedObject.details?.['SQL mode']} />
+                  <ObjectDefinition definition={selectedObject.definition} name={objectDisplayName(selectedObject)} sqlMode={selectedObject.details?.['SQL mode']} />
                 {:else}
                   <p>{selectedObject.details?.['Definition status'] || 'SQL definition is unavailable to this account.'}</p>
                 {/if}

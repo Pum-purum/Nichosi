@@ -2,7 +2,8 @@
 
 The object browser lists views, triggers, procedures, functions, scheduled events,
 roles and users. Select a category and an object to inspect its full CREATE statement.
-The detail panel focuses on SQL, without a separate metadata grid. The read-only code viewer includes line numbers, horizontal scrolling
+The detail panel starts with the object name and SQL, without a decorative icon,
+repeated category label or separate metadata grid. The read-only code viewer includes line numbers, horizontal scrolling
 and an icon-only Copy SQL action in the top-right corner of the code panel.
 The copy button appears on hover or keyboard focus, and stays visible on touch
 devices. Highlight.js supplies local SQL syntax highlighting for
@@ -20,7 +21,9 @@ SELECT/FROM/WHERE/SET, and nested BEGIN blocks and subqueries gain their own lev
 protected from keyword formatting. The viewer keeps its readable formatting while copying uses the compact
 server definition; there is no original-text toggle. Incomplete quoted text
 or comments fall back to the original definition. Backslash-containing strings
-also use the original text when the object SQL mode is unknown. Formatting does not execute SQL. Accounts are server-wide, identified by both user name and host.
+also use the original text when the object SQL mode is unknown. Formatting does not execute SQL. Accounts are server-wide, identified by both user name and host. Account labels
+and filtering use the plain account name and host (for example, root@localhost),
+without SQL quoting. Object identity and SQL definitions retain their original quoting.
 Definitions for views, triggers, procedures, functions and events come from
 `SHOW CREATE`, preserving the server-reported declaration, parameters, definer,
 schedule, options and body rather than displaying only the body. This is the
