@@ -34,6 +34,7 @@
   let tableTab = $state<'data' | 'info'>('data');
   let activeObjectType = $state<ObjectType>('table');
   let selectedObject = $state<DatabaseObject | null>(null);
+  const relationName = $derived(activeObjectType === 'view' ? selectedObject?.name ?? '' : selectedTable);
   let definitionLoading = $state(false);
   let definitionError = $state('');
   let definitionRequestId = 0;
@@ -43,7 +44,7 @@
   let objects = $state<components['schemas']['DatabaseObject'][]>([]);
   let largestTableBytes = $derived(tables.reduce((largest, table) => Math.max(largest, table.dataBytes + table.indexBytes), 0));
   let rowsPage = $state<RowsPage | null>(null);
-  const rowActionDisabledReason = $derived(selectedConnection?.readonly ? 'Read-only connection' : !rowsPage?.editable ? rowsPage?.readOnlyReason || 'Read-only table' : '');
+  const rowActionDisabledReason = $derived(activeObjectType === 'view' ? 'Views are read-only' : selectedConnection?.readonly ? 'Read-only connection' : !rowsPage?.editable ? rowsPage?.readOnlyReason || 'Read-only table' : '');
   let currentPage = $state(1);
   let pageSize = $state(50);
   let databaseLoading = $state(false);
@@ -111,23 +112,30 @@
       const schema = await request<components['schemas']['Schema']>(`/api/connections/${encodeURIComponent(connection.id)}/schema`);
       if (requestId !== databaseRequestId) return;
       tables = schema.tables; objects = schema.objects; metadataWarnings = schema.warnings ?? [];
-      if (tables.length) await selectTable(tables[0].name);
+      if (activeObjectType === 'table') {
+        if (tables.length) await selectTable(tables[0].name, 1, null, 'table');
+      } else selectSection(activeObjectType);
     } catch (cause) { if (requestId === databaseRequestId) error = cause instanceof Error ? cause.message : 'Could not read database schema'; }
     finally { if (requestId === databaseRequestId) databaseLoading = false; }
   }
 
-  async function selectTable(name: string, page = 1, control: number | 'previous' | 'next' | null = null) {
-    if (!selectedConnection) return;
+  async function selectTable(name: string, page = 1, control: number | 'previous' | 'next' | null = null, kind: 'table' | 'view' = activeObjectType === 'view' ? 'view' : 'table') {
+    if (!selectedConnection || !name) return;
     const requestId = ++rowsRequestId;
     const minimumLoadingTime = new Promise<void>((resolve) => setTimeout(resolve, 200));
-    activeObjectType = 'table'; selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; selectedTable = name; error = ''; rowsLoading = true; pendingPageControl = control;
+    const changingRelation = activeObjectType !== kind || relationName !== name;
+    activeObjectType = kind;
+    if (kind === 'table') { selectedObject = null; selectedTable = name; }
+    definitionRequestId++; definitionLoading = false; definitionError = '';
+    if (changingRelation) { rowsPage = null; currentPage = 1; }
+    error = ''; rowsLoading = true; pendingPageControl = control;
     try {
-      const result = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/tables/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: pageSize, offset: (page - 1) * pageSize }) });
+      const result = await request<RowsPage>(`/api/connections/${encodeURIComponent(selectedConnection.id)}/${kind === 'view' ? 'views' : 'tables'}/${encodeURIComponent(name)}/rows`, { method: 'POST', body: JSON.stringify({ limit: pageSize, offset: (page - 1) * pageSize }) });
       await minimumLoadingTime;
       if (requestId === rowsRequestId) { rowsPage = result; currentPage = page; }
     } catch (cause) {
       await minimumLoadingTime;
-      if (requestId === rowsRequestId) { error = cause instanceof Error ? cause.message : 'Could not read table rows'; rowsPage = null; }
+      if (requestId === rowsRequestId) { error = cause instanceof Error ? cause.message : 'Could not read rows'; rowsPage = null; }
     } finally {
       if (requestId === rowsRequestId) { rowsLoading = false; pendingPageControl = null; }
     }
@@ -168,16 +176,30 @@
   }
 
   function selectSection(type: ObjectType) {
+    rowsRequestId++; rowsLoading = false; pendingPageControl = null; rowsPage = null; currentPage = 1; error = '';
     activeObjectType = type;
+    tableTab = 'data'; tableSearch = '';
+    if (type === 'table') {
+      selectedObject = null;
+      definitionRequestId++; definitionLoading = false; definitionError = '';
+      const name = selectedTable || tables[0]?.name;
+      if (name) void selectTable(name, 1, null, 'table');
+      return;
+    }
     const object = objects.find((object) => object.type === type) ?? null;
     if (object) void selectObject(object);
     else { selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; }
-    tableSearch = '';
-    if (type === 'table' && !selectedTable && tables.length) void selectTable(tables[0].name);
   }
 
   async function selectObject(object: DatabaseObject) {
+    const changed = selectedObject?.name !== object.name || activeObjectType !== object.type;
     selectedObject = object;
+    activeObjectType = object.type;
+    if (object.type === 'view') {
+      if (changed) { rowsPage = null; currentPage = 1; }
+      await selectTable(object.name, 1, null, 'view');
+      return;
+    }
     const connectionId = selectedConnection?.id;
     const requestId = ++definitionRequestId;
     definitionError = '';
@@ -283,7 +305,7 @@
 <div class="app-shell">
   <main class:has-connections={connections.length > 0} class:database-open={selectedConnection !== null}>
     {#if selectedConnection}
-      <section class="database-workspace" aria-label="Database tables">
+      <section class="database-workspace" aria-label="Database workspace">
         <nav class="app-rail" aria-label="Workspace navigation">
           {#each objectSections as section}
             <button class:active={activeObjectType === section.type} class="rail-button category-rail-button" aria-label={section.label} aria-current={activeObjectType === section.type ? 'page' : undefined} title={section.label} onclick={() => selectSection(section.type)}>
@@ -327,25 +349,26 @@
         </aside>
 
         <div class="workspace-main">
-        {#if activeObjectType === 'table'}
+        {#if activeObjectType === 'table' || activeObjectType === 'view'}
           <div class="table-main">
-            <div class="table-bottom-tabs" tabindex="-1" role="tablist" aria-label="Table workspace" onkeydown={(event) => {
-              if (!selectedTable) return;
+            {#if activeObjectType === 'view' && relationName}<div class="relation-readonly"><Eye size={15} /><strong>{relationName}</strong><span>View · Read-only</span></div>{/if}
+            <div class="table-bottom-tabs" tabindex="-1" role="tablist" aria-label={activeObjectType === 'view' ? 'View workspace' : 'Table workspace'} onkeydown={(event) => {
+              if (!relationName) return;
               if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
               event.preventDefault();
               tableTab = event.key === 'Home' ? 'data' : event.key === 'End' ? 'info' : tableTab === 'data' ? 'info' : 'data';
               (event.currentTarget.querySelector(`[id="table-${tableTab}-tab"]`) as HTMLButtonElement)?.focus();
             }}>
               <button id="table-data-tab" role="tab" aria-selected={tableTab === 'data'} aria-controls="table-data-panel" tabindex={tableTab === 'data' ? 0 : -1} onclick={() => tableTab = 'data'}><TableProperties size={15} />Data</button>
-              <button id="table-info-tab" role="tab" aria-selected={tableTab === 'info'} aria-controls="table-info-panel" tabindex={tableTab === 'info' ? 0 : -1} disabled={!selectedTable} onclick={() => tableTab = 'info'}><Database size={15} />Table info</button>
+              <button id="table-info-tab" role="tab" aria-selected={tableTab === 'info'} aria-controls="table-info-panel" tabindex={tableTab === 'info' ? 0 : -1} disabled={!relationName} onclick={() => tableTab = 'info'}><Database size={15} />{activeObjectType === 'view' ? 'View info' : 'Table info'}</button>
             </div>
             <div id="table-data-panel" role="tabpanel" tabindex="0" aria-labelledby="table-data-tab" hidden={tableTab !== 'data'} class="table-data-panel">
-            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<DataError message={error} busy={reconnecting} reconnect={() => void reconnectDatabase()} back={showConnections} />{:else if rowsPage}<table class="data-grid" inert={databaseLoading || rowsLoading}><thead><tr>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}<th class="actions-head">Actions</th></tr></thead><tbody>{#each pagedRows as row}<tr>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}<td class="row-actions"><button class="edit-row" aria-label="Edit row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Edit row'}><Pencil size={16} /></button><button class="delete-row" aria-label="Delete row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Delete row'}><Trash2 size={16} /></button></td></tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || (rowsLoading && pendingPageControl === null)}<div class="grid-loading" role="status"><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
-            {#if !error}<footer class="grid-footer"><span>Showing <strong>{rowsPage && rowsPage.totalRows > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, rowsPage.totalRows)} of ${rowsPage.totalRows}` : '0 of 0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page" disabled={rowsLoading || databaseLoading} bind:value={pageSize} onchange={() => void selectTable(selectedTable, 1)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><span class="grid-summary">Rows: <strong>{pagedRows.length}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination">{#if currentPage > 1}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage - 1, 'previous')} aria-label="Previous page" aria-busy={pendingPageControl === 'previous'}>{#if pendingPageControl === 'previous'}<span class="page-spinner" aria-hidden="true"></span>{:else}‹{/if}</button>{/if}{#each pageItems as page, index}{#if index > 0 && page > pageItems[index - 1] + 1}<span class="pagination-ellipsis">…</span>{/if}{#if currentPage === page}<span class="active" aria-current="page" aria-label={`Page ${page}`}>{page}</span>{:else}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, page, page)} aria-label={`Page ${page}`} aria-busy={pendingPageControl === page}>{#if pendingPageControl === page}<span class="page-spinner" aria-hidden="true"></span>{:else}{page}{/if}</button>{/if}{/each}{#if currentPage < totalPages}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage + 1, 'next')} aria-label="Next page" aria-busy={pendingPageControl === 'next'}>{#if pendingPageControl === 'next'}<span class="page-spinner" aria-hidden="true"></span>{:else}›{/if}</button>{/if}</span></footer>{/if}
+            <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<DataError message={error} busy={reconnecting} reconnect={() => void reconnectDatabase()} back={showConnections} />{:else if rowsPage}<table class="data-grid" inert={databaseLoading || rowsLoading}><thead><tr>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}<th class="actions-head">Actions</th></tr></thead><tbody>{#each pagedRows as row}<tr>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}<td class="row-actions"><button class="edit-row" aria-label="Edit row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Edit row'}><Pencil size={16} /></button><button class="delete-row" aria-label="Delete row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Delete row'}><Trash2 size={16} /></button></td></tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if activeObjectType === 'view'}Select a view from the left menu.{:else if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || (rowsLoading && pendingPageControl === null)}<div class="grid-loading" role="status"><span class="grid-spinner"></span><span>Loading data…</span></div>{/if}</div>
+            {#if !error}<footer class="grid-footer"><span>Showing <strong>{rowsPage && rowsPage.totalRows > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, rowsPage.totalRows)} of ${rowsPage.totalRows}` : '0 of 0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page" disabled={rowsLoading || databaseLoading || !relationName} bind:value={pageSize} onchange={() => void selectTable(relationName, 1)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><span class="grid-summary">Rows: <strong>{pagedRows.length}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination">{#if currentPage > 1}<button disabled={rowsLoading} onclick={() => void selectTable(relationName, currentPage - 1, 'previous')} aria-label="Previous page" aria-busy={pendingPageControl === 'previous'}>{#if pendingPageControl === 'previous'}<span class="page-spinner" aria-hidden="true"></span>{:else}‹{/if}</button>{/if}{#each pageItems as page, index}{#if index > 0 && page > pageItems[index - 1] + 1}<span class="pagination-ellipsis">…</span>{/if}{#if currentPage === page}<span class="active" aria-current="page" aria-label={`Page ${page}`}>{page}</span>{:else}<button disabled={rowsLoading} onclick={() => void selectTable(relationName, page, page)} aria-label={`Page ${page}`} aria-busy={pendingPageControl === page}>{#if pendingPageControl === page}<span class="page-spinner" aria-hidden="true"></span>{:else}{page}{/if}</button>{/if}{/each}{#if currentPage < totalPages}<button disabled={rowsLoading} onclick={() => void selectTable(relationName, currentPage + 1, 'next')} aria-label="Next page" aria-busy={pendingPageControl === 'next'}>{#if pendingPageControl === 'next'}<span class="page-spinner" aria-hidden="true"></span>{:else}›{/if}</button>{/if}</span></footer>{/if}
             </div>
             <div id="table-info-panel" role="tabpanel" tabindex="0" aria-labelledby="table-info-tab" class="table-info-panel" hidden={tableTab !== 'info'}>
-              {#if tableTab === 'info'}
-                {#key `${selectedConnection.id}/${selectedTable}`}<TableMetadata connectionId={selectedConnection.id} table={selectedTable} />{/key}
+              {#if tableTab === 'info' && relationName}
+                {#key `${selectedConnection.id}/${activeObjectType}/${relationName}`}<TableMetadata connectionId={selectedConnection.id} table={relationName} relationType={activeObjectType === 'view' ? 'view' : 'table'} />{/key}
               {/if}
             </div>
 

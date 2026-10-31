@@ -77,6 +77,14 @@ statement. Metadata loads when you open the tab; use **Refresh** to reload it.
 Sizes and row counts are estimates. Unavailable or truncated categories show warnings.
 Switch back to **Data** to return to the rows and current page.
 
+## Views
+
+Choose **Views** in the far-left rail and select a view to browse its rows using the
+same data grid, page sizes, and pagination as tables. View rows are always read-only,
+even on writable connections. The **View info** tab shows properties, column metadata,
+and the formatted `CREATE VIEW` statement with copy and refresh controls. Views have
+no separate table storage; table-only indexes, foreign keys and triggers are not shown.
+
 ## Stop the app
 
 ```sh

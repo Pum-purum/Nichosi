@@ -78,6 +78,8 @@ func main() {
 	mux.Handle("GET /api/connections/{connId}/schema", application.authorize(http.HandlerFunc(application.getSchema)))
 	mux.Handle("GET /api/connections/{connId}/object-definition", application.authorize(http.HandlerFunc(application.getObjectDefinition)))
 	mux.Handle("GET /api/connections/{connId}/tables/{table}/metadata", application.authorize(http.HandlerFunc(application.getTableMetadata)))
+	mux.Handle("POST /api/connections/{connId}/views/{view}/rows", application.authorize(http.HandlerFunc(application.queryViewRows)))
+	mux.Handle("GET /api/connections/{connId}/views/{view}/metadata", application.authorize(http.HandlerFunc(application.getViewMetadata)))
 	mux.Handle("POST /api/connections/{connId}/tables/{table}/rows", application.authorize(http.HandlerFunc(application.queryRows)))
 	mux.Handle("/", application.static)
 
@@ -305,7 +307,9 @@ func (a *app) getObjectDefinition(w http.ResponseWriter, r *http.Request) {
 
 func quoteMySQLIdent(name string) string { return "`" + strings.ReplaceAll(name, "`", "``") + "`" }
 
-func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
+func (a *app) queryRows(w http.ResponseWriter, r *http.Request)     { a.queryObjectRows(w, r, false) }
+func (a *app) queryViewRows(w http.ResponseWriter, r *http.Request) { a.queryObjectRows(w, r, true) }
+func (a *app) queryObjectRows(w http.ResponseWriter, r *http.Request, view bool) {
 	item := a.connection(r.PathValue("connId"))
 	if item == nil {
 		writeError(w, 404, "not_found", "Connection not found")
@@ -315,18 +319,6 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	defer item.mu.RUnlock()
 	if item.pool == nil {
 		writeError(w, http.StatusConflict, "disconnected", "Connection is closed")
-		return
-	}
-	table := r.PathValue("table")
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	var exists int
-	if err := item.pool.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND TABLE_TYPE = 'BASE TABLE'", item.Database, table).Scan(&exists); err != nil {
-		writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
-		return
-	}
-	if exists == 0 {
-		writeError(w, http.StatusNotFound, "table_not_found", "Table not found")
 		return
 	}
 	var query RowsQuery
@@ -339,81 +331,45 @@ func (a *app) queryRows(w http.ResponseWriter, r *http.Request) {
 	if query.Limit != nil {
 		limit = *query.Limit
 	}
-	if limit < 1 {
-		limit = 1
-	}
-	if limit > 1000 {
-		limit = 1000
-	}
 	offset := 0
-	if query.Offset != nil && *query.Offset > 0 {
+	if query.Offset != nil {
 		offset = *query.Offset
 	}
-	cols, err := item.pool.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", item.Database, table)
+	name := r.PathValue("table")
+	kind := "table"
+	if view {
+		name = r.PathValue("view")
+		kind = "view"
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	result, err := driver.MySQLRows(ctx, item.pool, item.Database, name, view, limit, offset)
+	if errors.Is(err, driver.ErrRowsObjectNotFound) {
+		writeError(w, 404, kind+"_not_found", "Requested "+kind+" not found")
+		return
+	}
 	if err != nil {
-		writeError(w, 502, "metadata_failed", err.Error())
-		return
-	}
-	defer cols.Close()
-	page := RowsPage{Columns: []Column{}, Rows: [][]interface{}{}, Editable: false}
-	if err := item.pool.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+quoteMySQLIdent(table)).Scan(&page.TotalRows); err != nil {
-		writeError(w, 502, "count_failed", err.Error())
-		return
-	}
-	names := []string{}
-	for cols.Next() {
-		var c Column
-		var nullable, key string
-		if err := cols.Scan(&c.Name, &c.Type, &nullable, &key); err != nil {
-			writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
-			return
+		code := "query_failed"
+		var stage *driver.RowError
+		if errors.As(err, &stage) {
+			code = stage.Stage
 		}
-		c.Nullable = nullable == "YES"
-		c.PrimaryKey = key == "PRI"
-		page.Columns = append(page.Columns, c)
-		names = append(names, c.Name)
-	}
-	if err := cols.Err(); err != nil {
-		writeError(w, http.StatusBadGateway, "metadata_failed", err.Error())
-		return
-	}
-	if len(names) == 0 {
-		writeJSON(w, 200, page)
-		return
-	}
-	selects := make([]string, len(names))
-	for i, n := range names {
-		selects[i] = quoteMySQLIdent(n)
-	}
-	result, err := item.pool.QueryContext(ctx, "SELECT "+strings.Join(selects, ",")+" FROM "+quoteMySQLIdent(table)+" LIMIT ? OFFSET ?", limit, offset)
-	if err != nil {
-		writeError(w, 502, "query_failed", err.Error())
-		return
-	}
-	defer result.Close()
-	values := make([]interface{}, len(names))
-	dest := make([]interface{}, len(names))
-	for i := range values {
-		dest[i] = &values[i]
-	}
-	for result.Next() {
-		if err := result.Scan(dest...); err != nil {
-			writeError(w, 502, "query_failed", err.Error())
-			return
+		message := err.Error()
+		if view {
+			message = "Could not read view rows"
 		}
-		row := append([]interface{}(nil), values...)
-		for i, v := range row {
-			if b, ok := v.([]byte); ok {
-				row[i] = string(b)
-			}
-		}
-		page.Rows = append(page.Rows, row)
-	}
-	if err := result.Err(); err != nil {
-		writeError(w, 502, "query_failed", err.Error())
+		writeError(w, 502, code, message)
 		return
 	}
-	page.ReadOnlyReason = ptrString("Editing is not available yet")
+	page := RowsPage{Columns: []Column{}, Rows: result.Rows, TotalRows: result.TotalRows, Editable: false}
+	for _, c := range result.Columns {
+		page.Columns = append(page.Columns, Column{Name: c.Name, Type: c.Type, Nullable: c.Nullable, PrimaryKey: c.PrimaryKey})
+	}
+	reason := "Editing is not available yet"
+	if view {
+		reason = "Views are read-only"
+	}
+	page.ReadOnlyReason = ptrString(reason)
 	writeJSON(w, 200, page)
 }
 

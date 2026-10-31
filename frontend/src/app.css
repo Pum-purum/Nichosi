@@ -332,3 +332,7 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .table-bottom-tabs button:hover:not(:disabled) { background: var(--surface-raised); color: var(--text); }
 .table-bottom-tabs button[aria-selected="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 .table-bottom-tabs button:disabled { opacity: .5; cursor: not-allowed; }
+
+.relation-readonly { display: flex; align-items: center; flex-shrink: 0; gap: 9px; min-height: 42px; padding-top: 8px; color: var(--accent); font-size: 12px; }
+.relation-readonly strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.relation-readonly span { flex-shrink: 0; margin-left: auto; color: var(--muted); }

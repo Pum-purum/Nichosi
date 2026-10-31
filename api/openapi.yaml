@@ -116,6 +116,49 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TableMetadata" }
         default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/views/{view}/metadata:
+    get:
+      operationId: getViewMetadata
+      description: Read view properties, columns and the full CREATE VIEW statement on demand, with a ten-second timeout and at most 1000 columns. Uses TableMetadata as a common relation metadata envelope; indexes, foreignKeys and triggers are empty, and storage estimates are omitted because a view has no own table storage. Availability limits are reported as warnings.
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - { $ref: "#/components/parameters/View" }
+      responses:
+        "200":
+          description: Read-only view metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TableMetadata" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/views/{view}/rows:
+    post:
+      operationId: queryViewRows
+      description: Read-only view rows with a ten-second timeout, default limit 200 and maximum 1000. Uses RowsQuery limit and offset. Editing is always disabled.
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - { $ref: "#/components/parameters/View" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RowsQuery" }
+      responses:
+        "200":
+          description: A page of rows
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RowsPage" }
+        "404":
+          description: Connection not found, or view metadata was read successfully and the view does not exist.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: Database access or metadata query failed. Query failures must not be reported as a missing table.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
   /api/connections/{connId}/tables/{table}/rows:
     post:
       operationId: queryRows
@@ -224,6 +267,7 @@ paths:
 components:
   parameters:
     ConnId: { name: connId, in: path, required: true, schema: { type: string } }
+    View: { name: view, in: path, required: true, schema: { type: string } }
     Table: { name: table, in: path, required: true, schema: { type: string } }
   responses:
     Error:

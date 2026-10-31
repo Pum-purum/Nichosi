@@ -328,6 +328,9 @@ type ConnId = string
 // Table defines model for Table.
 type Table = string
 
+// View defines model for View.
+type View = string
+
 // GetObjectDefinitionParams defines parameters for GetObjectDefinition.
 type GetObjectDefinitionParams struct {
 	Type GetObjectDefinitionParamsType `form:"type" json:"type"`
@@ -360,3 +363,6 @@ type PreviewChangesJSONRequestBody = ChangeSet
 
 // QueryRowsJSONRequestBody defines body for QueryRows for application/json ContentType.
 type QueryRowsJSONRequestBody = RowsQuery
+
+// QueryViewRowsJSONRequestBody defines body for QueryViewRows for application/json ContentType.
+type QueryViewRowsJSONRequestBody = RowsQuery

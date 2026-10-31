@@ -118,6 +118,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/{connId}/views/{view}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read view properties, columns and the full CREATE VIEW statement on demand, with a ten-second timeout and at most 1000 columns. Uses TableMetadata as a common relation metadata envelope; indexes, foreignKeys and triggers are empty, and storage estimates are omitted because a view has no own table storage. Availability limits are reported as warnings. */
+        get: operations["getViewMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{connId}/views/{view}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Read-only view rows with a ten-second timeout, default limit 200 and maximum 1000. Uses RowsQuery limit and offset. Editing is always disabled. */
+        post: operations["queryViewRows"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections/{connId}/tables/{table}/rows": {
         parameters: {
             query?: never;
@@ -447,6 +481,7 @@ export interface components {
     };
     parameters: {
         ConnId: string;
+        View: string;
         Table: string;
     };
     requestBodies: never;
@@ -634,6 +669,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TableMetadata"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getViewMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connId: components["parameters"]["ConnId"];
+                view: components["parameters"]["View"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only view metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableMetadata"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    queryViewRows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connId: components["parameters"]["ConnId"];
+                view: components["parameters"]["View"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RowsQuery"];
+            };
+        };
+        responses: {
+            /** @description A page of rows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RowsPage"];
+                };
+            };
+            /** @description Connection not found, or view metadata was read successfully and the view does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Database access or metadata query failed. Query failures must not be reported as a missing table. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];

@@ -3,7 +3,7 @@
   import ObjectDefinition from './ObjectDefinition.svelte';
   import type { components } from './api/schema';
 
-  let { connectionId, table }: { connectionId: string; table: string } = $props();
+  let { connectionId, table, relationType = 'table' }: { connectionId: string; table: string; relationType?: 'table' | 'view' } = $props();
   type Metadata = components['schemas']['TableMetadata'];
   let metadata = $state<Metadata | null>(null);
   let loading = $state(true);
@@ -11,13 +11,15 @@
   let attempt = $state(0);
   const groups = $derived(metadata ? [
     { title: 'Columns', rows: metadata.columns, preferred: ['Name', 'Type', 'Default', 'Nullable', 'Extra', 'Key'] },
-    { title: 'Keys and indexes', rows: groupMetadataKeys(metadata.indexes), preferred: ['Name', 'Columns', 'Kind', 'Type'] },
-    { title: 'Foreign keys', rows: groupMetadataKeys(metadata.foreignKeys, true), preferred: ['Name', 'Columns', 'References', 'On update', 'On delete'] },
-    { title: 'Triggers', rows: metadata.triggers, preferred: ['Name', 'Timing', 'Event', 'Statement'] },
+    ...(relationType === 'table' ? [
+      { title: 'Keys and indexes', rows: groupMetadataKeys(metadata.indexes), preferred: ['Name', 'Columns', 'Kind', 'Type'] },
+      { title: 'Foreign keys', rows: groupMetadataKeys(metadata.foreignKeys, true), preferred: ['Name', 'Columns', 'References', 'On update', 'On delete'] },
+      { title: 'Triggers', rows: metadata.triggers, preferred: ['Name', 'Timing', 'Event', 'Statement'] },
+    ] : []),
   ] : []);
   $effect(() => {
     const controller = new AbortController();
-    const path = `/api/connections/${encodeURIComponent(connectionId)}/tables/${encodeURIComponent(table)}/metadata`;
+    const path = `/api/connections/${encodeURIComponent(connectionId)}/${relationType === 'view' ? 'views' : 'tables'}/${encodeURIComponent(table)}/metadata`;
     attempt;
     metadata = null; loading = true; error = '';
     void (async () => {
@@ -27,7 +29,7 @@
         if (!response.ok) throw new Error(body.message || `Request failed (${response.status})`);
         if (!controller.signal.aborted) metadata = body as Metadata;
       } catch (cause) {
-        if (!controller.signal.aborted) error = cause instanceof Error ? cause.message : 'Could not load table metadata';
+        if (!controller.signal.aborted) error = cause instanceof Error ? cause.message : 'Could not load metadata';
       } finally {
         if (!controller.signal.aborted) loading = false;
       }
@@ -37,7 +39,7 @@
 </script>
 
 <section class="table-metadata" aria-label={`Metadata for ${table}`} aria-busy={loading}>
-  <header><h1>{table}</h1><span>Table information · Read-only</span><button disabled={loading} onclick={() => attempt++}>Refresh</button></header>
+  <header><h1>{table}</h1><span>{relationType === 'view' ? 'View information' : 'Table information'} · Read-only</span><button disabled={loading} onclick={() => attempt++}>Refresh</button></header>
   {#if loading}
     <p role="status">Loading table information…</p>
   {:else if error}
@@ -45,7 +47,7 @@
   {:else if metadata}
     {#each metadata.warnings as warning}<p class="metadata-warning" role="status">{warning}</p>{/each}
     <h2>Overview</h2>
-    <p class="estimate-note">Row counts and storage sizes are server estimates. Metadata reflects the last refresh.</p>
+    <p class="estimate-note">{relationType === 'view' ? 'Views have no separate table storage. Properties reflect the last refresh.' : 'Row counts and storage sizes are server estimates. Metadata reflects the last refresh.'}</p>
     <dl>{#each Object.entries(metadata.details) as [label, value]}<div><dt>{label}</dt><dd>{value || '—'}</dd></div>{/each}</dl>
     {#each groups as group}
       <section class="metadata-group" aria-label={group.title}>
@@ -57,7 +59,7 @@
         {:else}<p>No entries returned. Any availability limits are listed above.</p>{/if}
       </section>
     {/each}
-    {#if metadata.definition}<ObjectDefinition definition={metadata.definition} name={table} />{:else}<h2>SQL definition</h2><p>CREATE TABLE is unavailable. See availability warnings above.</p>{/if}
+    {#if metadata.definition}<ObjectDefinition definition={metadata.definition} name={table} isView={relationType === 'view'} sqlMode={metadata.details['SQL mode']} />{:else}<h2>SQL definition</h2><p>CREATE {relationType === 'view' ? 'VIEW' : 'TABLE'} is unavailable. See availability warnings above.</p>{/if}
   {/if}
 </section>
 
