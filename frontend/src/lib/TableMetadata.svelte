@@ -39,15 +39,15 @@
 </script>
 
 <section class="table-metadata" aria-label={`Metadata for ${table}`} aria-busy={loading}>
-  <header><h1>{table}</h1><span>{relationType === 'view' ? 'View information' : 'Table information'} · Read-only</span><button disabled={loading} onclick={() => attempt++}>Refresh</button></header>
+  <header><h1>{table}</h1>{#if relationType === 'table'}<span>Table information · Read-only</span>{/if}</header>
   {#if loading}
-    <p role="status">Loading table information…</p>
+    <p role="status">Loading metadata…</p>
   {:else if error}
     <div role="alert"><p>{error}</p><button onclick={() => attempt++}>Retry</button></div>
   {:else if metadata}
     {#each metadata.warnings as warning}<p class="metadata-warning" role="status">{warning}</p>{/each}
     <h2>Overview</h2>
-    <p class="estimate-note">{relationType === 'view' ? 'Views have no separate table storage. Properties reflect the last refresh.' : 'Row counts and storage sizes are server estimates. Metadata reflects the last refresh.'}</p>
+    <p class="estimate-note">{relationType === 'view' ? 'Views have no separate table storage. Properties reflect the last load.' : 'Row counts and storage sizes are server estimates. Metadata reflects the last load.'}</p>
     <dl>{#each Object.entries(metadata.details) as [label, value]}<div><dt>{label}</dt><dd>{value || '—'}</dd></div>{/each}</dl>
     {#each groups as group}
       <section class="metadata-group" aria-label={group.title}>
@@ -68,7 +68,6 @@
   header { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
   h1 { margin: 0; overflow-wrap: anywhere; font-size: 22px; }
   header > span, .estimate-note, p { color: var(--muted); font-size: 13px; line-height: 1.6; }
-  header > button { margin-left: auto; }
   button { padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); cursor: pointer; }
   button:disabled { opacity: .5; cursor: default; }
   h2 { margin: 26px 0 12px; font-size: 14px; }
