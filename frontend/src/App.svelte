@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Braces, Clock, Code2, Database, Eye, HardDrive, KeyRound, Pencil, Search, Server, ShieldCheck, TableProperties, Trash2, Unplug, UserRound, Zap } from '@lucide/svelte';
   import { onMount } from 'svelte';
+  import TableMetadata from './lib/TableMetadata.svelte';
   import CellValue from './lib/CellValue.svelte';
   import ObjectDefinition from './lib/ObjectDefinition.svelte';
   import UserDetails from './lib/UserDetails.svelte';
@@ -30,6 +31,7 @@
   let loading = $state(true);
   let selectedConnection = $state<Connection | null>(null);
   let selectedTable = $state('');
+  let tableTab = $state<'data' | 'info'>('data');
   let activeObjectType = $state<ObjectType>('table');
   let selectedObject = $state<DatabaseObject | null>(null);
   let definitionLoading = $state(false);
@@ -100,7 +102,7 @@
     rowsRequestId += 1;
     rowsLoading = false;
     pendingPageControl = null;
-    selectedConnection = connection; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; rowsPage = null; tables = []; objects = []; metadataWarnings = []; error = ''; databaseLoading = true;
+    selectedConnection = connection; tableTab = 'data'; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; rowsPage = null; tables = []; objects = []; metadataWarnings = []; error = ''; databaseLoading = true;
     try {
       const connected = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/connect`, { method: 'POST' });
       if (requestId !== databaseRequestId) return;
@@ -327,8 +329,26 @@
         <div class="workspace-main">
         {#if activeObjectType === 'table'}
           <div class="table-main">
+            <div class="table-bottom-tabs" tabindex="-1" role="tablist" aria-label="Table workspace" onkeydown={(event) => {
+              if (!selectedTable) return;
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              tableTab = event.key === 'Home' ? 'data' : event.key === 'End' ? 'info' : tableTab === 'data' ? 'info' : 'data';
+              (event.currentTarget.querySelector(`[id="table-${tableTab}-tab"]`) as HTMLButtonElement)?.focus();
+            }}>
+              <button id="table-data-tab" role="tab" aria-selected={tableTab === 'data'} aria-controls="table-data-panel" tabindex={tableTab === 'data' ? 0 : -1} onclick={() => tableTab = 'data'}><TableProperties size={15} />Data</button>
+              <button id="table-info-tab" role="tab" aria-selected={tableTab === 'info'} aria-controls="table-info-panel" tabindex={tableTab === 'info' ? 0 : -1} disabled={!selectedTable} onclick={() => tableTab = 'info'}><Database size={15} />Table info</button>
+            </div>
+            <div id="table-data-panel" role="tabpanel" tabindex="0" aria-labelledby="table-data-tab" hidden={tableTab !== 'data'} class="table-data-panel">
             <div class="data-grid-wrap" aria-busy={databaseLoading || rowsLoading}>{#if !databaseLoading && error}<DataError message={error} busy={reconnecting} reconnect={() => void reconnectDatabase()} back={showConnections} />{:else if rowsPage}<table class="data-grid" inert={databaseLoading || rowsLoading}><thead><tr>{#each rowsPage.columns as column}<th><span class="column-name">{#if column.primaryKey}<KeyRound size={13} />{/if}{column.name}<span class="sort-arrows">↕</span></span><small>{column.type}{#if column.primaryKey}<em>PK</em>{/if}</small></th>{/each}<th class="actions-head">Actions</th></tr></thead><tbody>{#each pagedRows as row}<tr>{#each row as value, columnIndex}<td><CellValue {value} sqlType={rowsPage.columns[columnIndex]?.type ?? ''} /></td>{/each}<td class="row-actions"><button class="edit-row" aria-label="Edit row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Edit row'}><Pencil size={16} /></button><button class="delete-row" aria-label="Delete row" disabled={!!rowActionDisabledReason} title={rowActionDisabledReason || 'Delete row'}><Trash2 size={16} /></button></td></tr>{/each}</tbody></table>{:else if !databaseLoading && !rowsLoading}<p class="grid-empty">{#if tables.length === 0}No tables in this database.{:else}Select a table from the left menu.{/if}</p>{/if}{#if databaseLoading || (rowsLoading && pendingPageControl === null)}<div class="grid-loading" role="status"><span class="grid-spinner"></span><span>Loading table…</span></div>{/if}</div>
             {#if !error}<footer class="grid-footer"><span>Showing <strong>{rowsPage && rowsPage.totalRows > 0 ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, rowsPage.totalRows)} of ${rowsPage.totalRows}` : '0 of 0'} rows</strong></span><label class="page-size-label">Rows/page: <select aria-label="Rows per page" disabled={rowsLoading || databaseLoading} bind:value={pageSize} onchange={() => void selectTable(selectedTable, 1)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><span class="grid-summary">Rows: <strong>{pagedRows.length}</strong> &nbsp; Columns: <strong>{rowsPage?.columns.length ?? 0}</strong></span><span class="pagination">{#if currentPage > 1}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage - 1, 'previous')} aria-label="Previous page" aria-busy={pendingPageControl === 'previous'}>{#if pendingPageControl === 'previous'}<span class="page-spinner" aria-hidden="true"></span>{:else}‹{/if}</button>{/if}{#each pageItems as page, index}{#if index > 0 && page > pageItems[index - 1] + 1}<span class="pagination-ellipsis">…</span>{/if}{#if currentPage === page}<span class="active" aria-current="page" aria-label={`Page ${page}`}>{page}</span>{:else}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, page, page)} aria-label={`Page ${page}`} aria-busy={pendingPageControl === page}>{#if pendingPageControl === page}<span class="page-spinner" aria-hidden="true"></span>{:else}{page}{/if}</button>{/if}{/each}{#if currentPage < totalPages}<button disabled={rowsLoading} onclick={() => void selectTable(selectedTable, currentPage + 1, 'next')} aria-label="Next page" aria-busy={pendingPageControl === 'next'}>{#if pendingPageControl === 'next'}<span class="page-spinner" aria-hidden="true"></span>{:else}›{/if}</button>{/if}</span></footer>{/if}
+            </div>
+            <div id="table-info-panel" role="tabpanel" tabindex="0" aria-labelledby="table-info-tab" class="table-info-panel" hidden={tableTab !== 'info'}>
+              {#if tableTab === 'info'}
+                {#key `${selectedConnection.id}/${selectedTable}`}<TableMetadata connectionId={selectedConnection.id} table={selectedTable} />{/key}
+              {/if}
+            </div>
+
           </div>
         {:else}
           <section class="object-main" aria-label={`${objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'} details`}>

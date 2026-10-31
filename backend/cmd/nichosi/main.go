@@ -77,6 +77,7 @@ func main() {
 	mux.Handle("POST /api/connections/{connId}/disconnect", application.authorize(http.HandlerFunc(application.disconnectConnection)))
 	mux.Handle("GET /api/connections/{connId}/schema", application.authorize(http.HandlerFunc(application.getSchema)))
 	mux.Handle("GET /api/connections/{connId}/object-definition", application.authorize(http.HandlerFunc(application.getObjectDefinition)))
+	mux.Handle("GET /api/connections/{connId}/tables/{table}/metadata", application.authorize(http.HandlerFunc(application.getTableMetadata)))
 	mux.Handle("POST /api/connections/{connId}/tables/{table}/rows", application.authorize(http.HandlerFunc(application.queryRows)))
 	mux.Handle("/", application.static)
 

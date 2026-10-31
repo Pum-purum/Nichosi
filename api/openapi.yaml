@@ -102,6 +102,20 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Connection" }
         default: { $ref: "#/components/responses/Error" }
+  /api/connections/{connId}/tables/{table}/metadata:
+    get:
+      operationId: getTableMetadata
+      description: Read table metadata on demand with a ten-second timeout and at most 1000 entries per category. Partial metadata includes explicit warnings; row counts and sizes are estimates.
+      parameters:
+        - { $ref: "#/components/parameters/ConnId" }
+        - { $ref: "#/components/parameters/Table" }
+      responses:
+        "200":
+          description: Table metadata, including availability warnings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TableMetadata" }
+        default: { $ref: "#/components/responses/Error" }
   /api/connections/{connId}/tables/{table}/rows:
     post:
       operationId: queryRows
@@ -272,6 +286,28 @@ components:
         foreignKey:
           allOf: [ { $ref: "#/components/schemas/ForeignRef" } ]
           nullable: true
+    TableMetadata:
+      type: object
+      required: [name, details, columns, indexes, foreignKeys, triggers, definition, warnings]
+      properties:
+        name: { type: string }
+        details:
+          type: object
+          additionalProperties: { type: string }
+        columns:
+          type: array
+          items: { type: object, additionalProperties: { type: string } }
+        indexes:
+          type: array
+          items: { type: object, additionalProperties: { type: string } }
+        foreignKeys:
+          type: array
+          items: { type: object, additionalProperties: { type: string } }
+        triggers:
+          type: array
+          items: { type: object, additionalProperties: { type: string } }
+        definition: { type: string, description: Full server-reported CREATE TABLE statement; empty when unavailable. }
+        warnings: { type: array, items: { type: string } }
     TableInfo:
       type: object
       required: [name, rowsEstimate, dataBytes, indexBytes, columns]

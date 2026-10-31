@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -122,11 +123,15 @@ func MySQLObjectDefinition(ctx context.Context, db *sql.DB, database, kind, name
 // QuoteIdent quotes a MySQL identifier.
 func QuoteIdent(name string) string { return "`" + strings.ReplaceAll(name, "`", "``") + "`" }
 
+var errDefinitionUnavailable = errors.New("CREATE statement is unavailable")
+
 // mysqlObjectDefinition reads columns by name because SHOW CREATE result layouts
 // differ across object kinds and MySQL/MariaDB versions.
 func mysqlObjectDefinition(ctx context.Context, db *sql.DB, database string, object *Object) error {
 	kind, column := "", ""
 	switch object.Type {
+	case "table":
+		kind, column = "TABLE", "Create Table"
 	case "view":
 		kind, column = "VIEW", "Create View"
 	case "trigger":
@@ -153,7 +158,7 @@ func mysqlObjectDefinition(ctx context.Context, db *sql.DB, database string, obj
 		if err := rows.Err(); err != nil {
 			return err
 		}
-		return fmt.Errorf("missing CREATE statement")
+		return fmt.Errorf("missing CREATE statement: %w", errDefinitionUnavailable)
 	}
 	values := make([]sql.NullString, len(columns))
 	dest := make([]any, len(columns))
@@ -166,14 +171,14 @@ func mysqlObjectDefinition(ctx context.Context, db *sql.DB, database string, obj
 	for i, name := range columns {
 		if strings.EqualFold(name, column) || object.Type == "trigger" && strings.EqualFold(name, "Create Trigger") {
 			if !values[i].Valid || values[i].String == "" {
-				return fmt.Errorf("CREATE statement is hidden")
+				return fmt.Errorf("CREATE statement is hidden: %w", errDefinitionUnavailable)
 			}
 			object.Definition = values[i].String
 			object.Details["Definition source"] = "SHOW CREATE " + kind
 		}
 	}
 	if object.Definition == "" {
-		return fmt.Errorf("missing CREATE statement column")
+		return fmt.Errorf("missing CREATE statement column: %w", errDefinitionUnavailable)
 	}
 	return rows.Err()
 }

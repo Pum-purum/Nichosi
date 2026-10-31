@@ -101,6 +101,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/{connId}/tables/{table}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read table metadata on demand with a ten-second timeout and at most 1000 entries per category. Partial metadata includes explicit warnings; row counts and sizes are estimates. */
+        get: operations["getTableMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections/{connId}/tables/{table}/rows": {
         parameters: {
             query?: never;
@@ -257,6 +274,27 @@ export interface components {
             nullable: boolean;
             primaryKey: boolean;
             foreignKey?: components["schemas"]["ForeignRef"] | null;
+        };
+        TableMetadata: {
+            name: string;
+            details: {
+                [key: string]: string;
+            };
+            columns: {
+                [key: string]: string;
+            }[];
+            indexes: {
+                [key: string]: string;
+            }[];
+            foreignKeys: {
+                [key: string]: string;
+            }[];
+            triggers: {
+                [key: string]: string;
+            }[];
+            /** @description Full server-reported CREATE TABLE statement; empty when unavailable. */
+            definition: string;
+            warnings: string[];
         };
         TableInfo: {
             name: string;
@@ -572,6 +610,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Connection"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getTableMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connId: components["parameters"]["ConnId"];
+                table: components["parameters"]["Table"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Table metadata, including availability warnings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableMetadata"];
                 };
             };
             default: components["responses"]["Error"];

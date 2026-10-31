@@ -168,9 +168,9 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .rail-button { display: grid; width: 40px; height: 40px; place-items: center; border: 0; border-radius: 8px; color: #a0a3a1; background: transparent; cursor: pointer; }
 .category-rail-button { position: relative; }
 .category-rail-button > small { position: absolute; top: 2px; right: 2px; min-width: 14px; height: 14px; padding: 0 3px; border: 1px solid #1d1f21; border-radius: 8px; color: #b9c0bb; background: #424847; font: 8px/12px var(--mono); text-align: center; }
-.category-rail-button.active > small { color: #c8e2cf; background: #35503d; }
+.category-rail-button.active > small { color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, #202224); }
 .rail-button:hover { color: #e0e2df; background: #292c2e; }
-.rail-button.active { color: #d6d8d5; background: #303436; }
+.rail-button.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, #1d1f21); box-shadow: inset 3px 0 var(--accent); }
 .rail-spacer { flex: 1; }
 .schema-sidebar { min-height: calc(100vh - 60px); padding: 14px 11px 12px; border-right-color: #343638; background: #202224; }
 .tree-branch { min-height: 0; flex: 1 1 auto; overflow: auto; padding-left: 0; overscroll-behavior: contain; }
@@ -222,7 +222,7 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .pagination button { min-width: 38px; width: auto; height: 30px; padding: 0 8px; border-color: #404446; border-radius: 7px; color: #c5c8c5; background: #242627; font-size: 12px; }
 .pagination button:disabled { color: #777c79; }
 .pagination > span { padding: 0 7px; color: #d7d9d7; white-space: nowrap; }
-.pagination > .active { display: inline-flex; min-width: 38px; height: 30px; align-items: center; justify-content: center; padding: 0 8px; border: 1px solid #83c96f; border-radius: 7px; color: #101410; background: #83c96f; font: 12px var(--mono); }
+.pagination > .active { display: inline-flex; min-width: 38px; height: 30px; align-items: center; justify-content: center; padding: 0 8px; border: 1px solid var(--accent); border-radius: 7px; color: #101410; background: var(--accent); font: 12px var(--mono); }
 .pagination .pagination-ellipsis { padding: 0 4px; color: #8f9692; }
 .grid-empty { margin: 26px; color: #aeb3af; font-size: 13px; }
 .object-main { display: flex; width: 100%; min-width: 0; min-height: 0; height: 100%; flex: 1; padding: 0 16px; }
@@ -324,3 +324,11 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .account-badge, .table-nav-item > .account-badge { flex: 0 0 auto; padding: 3px 6px; border: 1px solid var(--account-badge-border); border-radius: 4px; background: var(--account-badge-bg); color: var(--account-badge-text); font: 10px/1.3 Roboto, sans-serif; white-space: nowrap; }
 
 .row-actions button:disabled { color: var(--dim); opacity: .55; cursor: not-allowed; }
+
+.table-data-panel, .table-info-panel { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.table-data-panel[hidden], .table-info-panel[hidden] { display: none; }
+.table-bottom-tabs { order: 1; display: flex; flex-shrink: 0; gap: 6px; margin-top: auto; padding: 8px 0; border-top: 1px solid var(--line); }
+.table-bottom-tabs button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 1px solid transparent; border-radius: 6px; color: var(--muted); background: transparent; font-size: 12px; cursor: pointer; }
+.table-bottom-tabs button:hover:not(:disabled) { background: var(--surface-raised); color: var(--text); }
+.table-bottom-tabs button[aria-selected="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.table-bottom-tabs button:disabled { opacity: .5; cursor: not-allowed; }

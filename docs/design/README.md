@@ -16,7 +16,7 @@ Nichosi is a quiet, local-first database workspace with an original visual ident
 ## Color and type
 
 - Use neutral graphite surfaces as the default dark theme. Avoid a green cast across backgrounds and panels.
-- Reserve a soft grass-green accent, around `#83c96f`, for focus, active navigation, and a small number of primary actions. Keep the accent distinct from the neutral surfaces.
+- Use soft grass-green (`#83c96f`) for focus, object icons, size bars, pagination, and primary actions. Use the same green accent for the selected object in the sidebar list and the active icon in the far-left navigation rail. Give the active rail icon a restrained tinted background and an inset marker. Keep icons, labels, and `aria-current` so selection never relies on color alone. Keep the accents distinct from neutral surfaces.
 - Use readable system typography. Table content should remain compact enough for scanning while labels and controls stay comfortably legible; avoid tiny metadata text.
 - Preserve visible keyboard focus, sufficient contrast, and clear disabled states. Do not communicate state by color alone.
 
@@ -33,3 +33,7 @@ Table pagination immediately shows a spinner inside the clicked page or arrow bu
 Cells derive their appearance from the column SQL type, never from the column position or text content. Keep the grid quiet: integers use blue, decimals green, strings white, JSON lilac, dates bright cyan, `ENUM` yellow, `SET` lilac, and boolean values purple. Unknown types use the normal text color. Numbers retain their original precision; dates retain the server representation and timezone, with a browser-local value in the tooltip. MySQL `tinyint(1)` is treated as boolean.
 
 SQL NULL is displayed as `NULL`. Text remains unquoted. `ENUM` values use one badge, while each selected `SET` value gets its own badge. Tooltips and accessible labels describe the SQL type and value.
+
+## Table information
+
+Keep a bottom tab strip with Data and Table info beneath the table workspace. Table info loads on demand for the selected connection and table, separately from row loading, and provides a refresh action. Show storage and engine details, estimated sizes and row counts, columns, primary/unique and other indexes, foreign keys, triggers, and the complete read-only CREATE TABLE statement with copy support. Display explicit warnings for unavailable or truncated metadata. Keep both tabs keyboard accessible and discard stale responses when switching tables or connections.

@@ -295,6 +295,20 @@ type TableInfo struct {
 	RowsEstimate int64  `json:"rowsEstimate"`
 }
 
+// TableMetadata defines model for TableMetadata.
+type TableMetadata struct {
+	Columns []map[string]string `json:"columns"`
+
+	// Definition Full server-reported CREATE TABLE statement; empty when unavailable.
+	Definition  string              `json:"definition"`
+	Details     map[string]string   `json:"details"`
+	ForeignKeys []map[string]string `json:"foreignKeys"`
+	Indexes     []map[string]string `json:"indexes"`
+	Name        string              `json:"name"`
+	Triggers    []map[string]string `json:"triggers"`
+	Warnings    []string            `json:"warnings"`
+}
+
 // TableStats defines model for TableStats.
 type TableStats struct {
 	DataBytes    int64  `json:"dataBytes"`

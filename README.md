@@ -69,6 +69,14 @@ If the app started before you finished editing `connections.json`, restart it to
 docker compose -f deploy/docker-compose.yml restart
 ```
 
+## Table information
+
+Use **Table info** at the bottom of the table workspace to inspect storage details,
+columns, keys and indexes, foreign keys, triggers, and the read-only `CREATE TABLE`
+statement. Metadata loads when you open the tab; use **Refresh** to reload it.
+Sizes and row counts are estimates. Unavailable or truncated categories show warnings.
+Switch back to **Data** to return to the rows and current page.
+
 ## Stop the app
 
 ```sh
