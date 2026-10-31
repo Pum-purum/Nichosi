@@ -332,3 +332,8 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #303930; border-radius
 .table-bottom-tabs button:hover:not(:disabled) { background: var(--surface-raised); color: var(--text); }
 .table-bottom-tabs button[aria-selected="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 .table-bottom-tabs button:disabled { opacity: .5; cursor: not-allowed; }
+
+.table-search > svg { flex-shrink: 0; }
+.table-search input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+.clear-object-filter { display: grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; }
+.clear-object-filter:hover { color: var(--text); background: var(--surface-raised); }

@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { Braces, Clock, Code2, Database, Eye, HardDrive, KeyRound, Pencil, Search, Server, ShieldCheck, TableProperties, Trash2, Unplug, UserRound, Zap } from '@lucide/svelte';
+  import { Braces, Clock, Code2, Database, Eye, HardDrive, KeyRound, Pencil, Search, Server, ShieldCheck, TableProperties, Trash2, Unplug, UserRound, X, Zap } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import TableMetadata from './lib/TableMetadata.svelte';
   import CellValue from './lib/CellValue.svelte';
   import ObjectDefinition from './lib/ObjectDefinition.svelte';
   import UserDetails from './lib/UserDetails.svelte';
   import DataError from './lib/DataError.svelte';
+  import { matchesObjectFilter } from './lib/object-filter';
   import { recoveryConnection } from './lib/connection-recovery';
   import type { components } from './lib/api/schema';
 
@@ -42,6 +43,12 @@
   let tables = $state<TableInfo[]>([]);
   let metadataWarnings = $state<string[]>([]);
   let objects = $state<components['schemas']['DatabaseObject'][]>([]);
+  let filterInput = $state<HTMLInputElement>();
+  const filteredTables = $derived(tables.filter(table => matchesObjectFilter(tableSearch, table.name)));
+  const filteredObjects = $derived(objects.filter(object => object.type === activeObjectType && matchesObjectFilter(tableSearch, objectDisplayName(object), object.name)));
+  const filteredCount = $derived(activeObjectType === 'table' ? filteredTables.length : filteredObjects.length);
+  const sectionLabel = $derived(objectSections.find(section => section.type === activeObjectType)?.label ?? 'Objects');
+  function clearObjectFilter() { tableSearch = ''; filterInput?.focus(); }
   let largestTableBytes = $derived(tables.reduce((largest, table) => Math.max(largest, table.dataBytes + table.indexBytes), 0));
   let rowsPage = $state<RowsPage | null>(null);
   const rowActionDisabledReason = $derived(activeObjectType === 'view' ? 'Views are read-only' : selectedConnection?.readonly ? 'Read-only connection' : !rowsPage?.editable ? rowsPage?.readOnlyReason || 'Read-only table' : '');
@@ -103,7 +110,7 @@
     rowsRequestId += 1;
     rowsLoading = false;
     pendingPageControl = null;
-    selectedConnection = connection; tableTab = 'data'; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; rowsPage = null; tables = []; objects = []; metadataWarnings = []; error = ''; databaseLoading = true;
+    selectedConnection = connection; tableSearch = ''; tableTab = 'data'; selectedTable = ''; activeObjectType = 'table'; selectedObject = null; definitionRequestId++; definitionLoading = false; definitionError = ''; rowsPage = null; tables = []; objects = []; metadataWarnings = []; error = ''; databaseLoading = true;
     try {
       const connected = await request<Connection>(`/api/connections/${encodeURIComponent(connection.id)}/connect`, { method: 'POST' });
       if (requestId !== databaseRequestId) return;
@@ -317,11 +324,11 @@
         </nav>
         <aside class="schema-sidebar">
           <div class="tree-branch">
-            <div class="object-list-heading"><strong>{objectSections.find((section) => section.type === activeObjectType)?.label}</strong>{#if sectionCount(activeObjectType) > 0}<small>{sectionCount(activeObjectType)}</small>{/if}</div>
-            <label class="table-search"><Search size={14} /><input bind:value={tableSearch} placeholder={`Filter ${objectSections.find((section) => section.type === activeObjectType)?.label.toLowerCase() ?? 'objects'}`} aria-label="Filter database objects" /></label>
-            <nav class="table-nav" aria-label={objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'}>
+            <div class="object-list-heading"><strong>{sectionLabel}</strong><small aria-live="polite" aria-atomic="true">{tableSearch.trim() ? `${filteredCount} / ${sectionCount(activeObjectType)}` : sectionCount(activeObjectType)}</small></div>
+            <div class="table-search"><Search size={14} /><input bind:this={filterInput} type="search" bind:value={tableSearch} placeholder={`Filter ${sectionLabel.toLowerCase()}`} aria-label="Filter database objects" aria-controls="database-object-list" autocomplete="off" spellcheck="false" onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); clearObjectFilter(); } }} />{#if tableSearch}<button class="clear-object-filter" aria-label="Clear object filter" title="Clear filter" onclick={clearObjectFilter}><X size={14} /></button>{/if}</div>
+            <nav id="database-object-list" class="table-nav" aria-label={objectSections.find((section) => section.type === activeObjectType)?.label ?? 'Database objects'}>
               {#if activeObjectType === 'table'}
-                {#each tables.filter((table) => table.name.toLowerCase().includes(tableSearch.toLowerCase())) as table}
+                {#each filteredTables as table}
                   <button class:active={selectedTable === table.name} class="table-nav-item table-with-size" aria-current={selectedTable === table.name ? 'page' : undefined} onclick={() => void selectTable(table.name)}>
                     <TableProperties size={17} /><span>{table.name}</span><small class="table-size" title={`${formatBytes(table.dataBytes + table.indexBytes)} · ${largestTableBytes > 0 ? ((table.dataBytes + table.indexBytes) / largestTableBytes * 100).toFixed(1) : '0'}% of the largest table`}>
                       <span>{formatBytes(table.dataBytes + table.indexBytes)}</span>
@@ -330,7 +337,7 @@
                   </button>
                 {/each}
               {:else}
-                {#each objects.filter((object) => object.type === activeObjectType && objectDisplayName(object).toLowerCase().includes(tableSearch.toLowerCase())) as object}
+                {#each filteredObjects as object}
                   {@const badge = accountBadge(object)}
                   <button class:active={selectedObject?.name === object.name} class="table-nav-item" aria-current={selectedObject?.name === object.name ? 'page' : undefined} onclick={() => selectObject(object)}>
                     {#if activeObjectType === 'view'}<Eye size={17} />{:else if activeObjectType === 'trigger'}<Zap size={17} />{:else if activeObjectType === 'user'}<UserRound size={17} />{:else if activeObjectType === 'role'}<ShieldCheck size={17} />{:else if activeObjectType === 'event'}<Clock size={17} />{:else if activeObjectType === 'procedure'}<Braces size={17} />{:else}<Code2 size={17} />{/if}<span>{objectDisplayName(object)}</span>
@@ -338,7 +345,7 @@
                   </button>
                 {/each}
               {/if}
-              {#if sectionCount(activeObjectType) === 0}<p class="object-list-empty">No {objectSections.find((section) => section.type === activeObjectType)?.label.toLowerCase()} found.</p>{/if}
+              {#if filteredCount === 0 && !databaseLoading}<p class="object-list-empty" role="status">{#if tableSearch.trim()}No matching {sectionLabel.toLowerCase()}.{:else}No {sectionLabel.toLowerCase()} found.{/if}</p>{/if}
             </nav>
           </div>
           <div class="sidebar-footer">

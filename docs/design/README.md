@@ -43,3 +43,7 @@ Within Table info, show column properties in this order: Name, Type, Default, Nu
 ## View workspace
 
 Views share the table data workspace, including typed cells, loading overlays, row count, page-size controls, and pagination. Use the sidebar selection to identify the current view, without a duplicate name or read-only banner above the workspace; editing stays disabled regardless of connection settings. Use Data and View info tabs at the bottom. Load view metadata only when opened, showing properties, ordered column metadata, and formatted CREATE VIEW with copy support. Omit the Actions column from view rows and the redundant View information / Read-only caption from view metadata. Refresh metadata by reloading the browser page, without a separate Refresh button. Do not show table storage estimates or empty table-only key/trigger sections. Guard row and metadata responses when switching objects or connections.
+
+## Sidebar object filtering
+
+Filter every object category immediately by name, ignoring case and surrounding whitespace. All whitespace-separated search words must match; account searches include the display identity and the server-reported name/host. Keep punctuation literal. Show matching/total counts and an explicit empty result message. Provide a clear button and Escape shortcut, retain the current detail selection while filtering, and reset the query when changing sections or connections. Table size scales remain based on all tables.
