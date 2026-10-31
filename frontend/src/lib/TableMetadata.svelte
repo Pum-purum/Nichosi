@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { groupMetadataKeys, metadataLabels } from './table-metadata';
   import ObjectDefinition from './ObjectDefinition.svelte';
   import type { components } from './api/schema';
 
@@ -9,10 +10,10 @@
   let error = $state('');
   let attempt = $state(0);
   const groups = $derived(metadata ? [
-    { title: 'Columns', rows: metadata.columns },
-    { title: 'Keys and indexes', rows: metadata.indexes },
-    { title: 'Foreign keys', rows: metadata.foreignKeys },
-    { title: 'Triggers', rows: metadata.triggers },
+    { title: 'Columns', rows: metadata.columns, preferred: ['Name', 'Type', 'Default', 'Nullable', 'Extra', 'Key'] },
+    { title: 'Keys and indexes', rows: groupMetadataKeys(metadata.indexes), preferred: ['Name', 'Columns', 'Kind', 'Type'] },
+    { title: 'Foreign keys', rows: groupMetadataKeys(metadata.foreignKeys, true), preferred: ['Name', 'Columns', 'References', 'On update', 'On delete'] },
+    { title: 'Triggers', rows: metadata.triggers, preferred: ['Name', 'Timing', 'Event', 'Statement'] },
   ] : []);
   $effect(() => {
     const controller = new AbortController();
@@ -50,7 +51,7 @@
       <section class="metadata-group" aria-label={group.title}>
         <h2>{group.title} <small>{group.rows.length}</small></h2>
         {#if group.rows.length}
-          {@const labels = [...new Set(group.rows.reduce<string[]>((labels, row) => labels.concat(Object.keys(row)), []))]}
+          {@const labels = metadataLabels(group.rows, group.preferred)}
           <!-- svelte-ignore a11y_no_noninteractive_tabindex (Scrollable metadata needs keyboard access.) -->
           <div class="metadata-scroll" role="region" aria-label={group.title} tabindex="0"><table><thead><tr>{#each labels as label}<th scope="col">{label}</th>{/each}</tr></thead><tbody>{#each group.rows as row}<tr>{#each labels as label}<td>{row[label] ?? '—'}</td>{/each}</tr>{/each}</tbody></table></div>
         {:else}<p>No entries returned. Any availability limits are listed above.</p>{/if}

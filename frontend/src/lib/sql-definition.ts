@@ -50,6 +50,33 @@ function tokenize(sql: string, noBackslashEscapes: boolean | undefined, ansiQuot
   return tokens;
 }
 
+/** CREATE TABLE has a list of definitions, not a query or routine body. */
+function formatTableTokens(tokens: Token[]): string {
+  let result = '';
+  let depth = 0;
+  let lineStart = true;
+  let space = false;
+  let bodyClosed = false;
+  const newline = () => { result = result.replace(/\s+$/, '') + '\n'; lineStart = true; space = false; };
+  const tableOptions = new Set(['ENGINE', 'AUTO_INCREMENT', 'DEFAULT', 'CHARSET', 'COLLATE', 'ROW_FORMAT', 'COMMENT', 'KEY_BLOCK_SIZE', 'COMPRESSION', 'ENCRYPTION', 'TABLESPACE', 'PARTITION']);
+  let previousWord = '';
+  for (const token of tokens) {
+    if (token.whitespace) { space = true; continue; }
+    if (token.text === ')' && depth === 1) { newline(); bodyClosed = true; }
+    if (bodyClosed && depth === 0 && token.word && tableOptions.has(token.word) && !(previousWord === 'DEFAULT' && ['CHARSET', 'COLLATE'].includes(token.word))) newline();
+    if (lineStart) result += depth > 0 && !(token.text === ')' && depth === 1) ? '  ' : '';
+    else if (space) result += ' ';
+    result += token.text;
+    lineStart = false; space = false;
+    if (token.text === '(') { depth++; if (depth === 1 && !bodyClosed) newline(); }
+    else if (token.text === ')') depth--;
+    else if (token.text === ',' && depth === 1 && !bodyClosed) newline();
+    if (token.lineComment) newline();
+    previousWord = token.word ?? '';
+  }
+  return result.replace(/\s+$/, '');
+}
+
 const clauses = [
   'ON SCHEDULE', 'ON COMPLETION', 'FOR EACH ROW', 'SQL SECURITY',
   'NOT DETERMINISTIC', 'DETERMINISTIC', 'READS SQL DATA', 'MODIFIES SQL DATA',
@@ -69,6 +96,10 @@ export function formatDefinition(sql: string, sqlMode?: string): { sql: string; 
   const modes = sqlMode?.toUpperCase().split(',').map((mode) => mode.trim());
   const tokens = tokenize(sql, modes?.includes('NO_BACKSLASH_ESCAPES'), modes?.includes('ANSI_QUOTES') ?? false);
   if (!tokens) return { sql, formatted: false };
+  const significant = tokens.filter(token => !token.whitespace);
+  if (significant[0]?.word === 'CREATE' && (significant[1]?.word === 'TABLE' || (significant[1]?.word === 'TEMPORARY' && significant[2]?.word === 'TABLE'))) {
+    return { sql: formatTableTokens(tokens), formatted: true };
+  }
   const first = tokens.find((token) => !token.whitespace);
   const kind = first?.word === 'CREATE'
     ? tokens.find((token) => ['EVENT', 'TRIGGER', 'PROCEDURE', 'FUNCTION', 'VIEW', 'ROLE'].includes(token.word ?? ''))?.word

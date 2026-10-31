@@ -203,3 +203,31 @@ describe('View definition defaults', () => {
     expect(compactDefinition(script)).toBe("CREATE VIEW v AS SELECT 'ALGORITHM=UNDEFINED'");
   });
 });
+
+describe('CREATE TABLE formatting', () => {
+  it('places definitions and table options on separate lines without splitting nested expressions', () => {
+    const source = "CREATE TABLE `sample` (`id` bigint NOT NULL, `price` decimal(12,2) DEFAULT 0, `status` enum('new','done') DEFAULT 'new', PRIMARY KEY (`id`,`status`), CONSTRAINT `check_price` CHECK ((`price` > 0))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+    const result = formatDefinition(source);
+    expect(result.formatted).toBe(true);
+    expect(result.sql).toBe([
+      'CREATE TABLE `sample` (',
+      '  `id` bigint NOT NULL,',
+      '  `price` decimal(12,2) DEFAULT 0,',
+      "  `status` enum('new','done') DEFAULT 'new',",
+      '  PRIMARY KEY (`id`,`status`),',
+      '  CONSTRAINT `check_price` CHECK ((`price` > 0))',
+      ')',
+      'ENGINE=InnoDB',
+      'DEFAULT CHARSET=utf8mb4',
+      'COLLATE=utf8mb4_unicode_ci',
+    ].join('\n'));
+    expect(formatDefinition(result.sql).sql).toBe(result.sql);
+  });
+
+  it('preserves literals, identifiers and comments containing SQL keywords and commas', () => {
+    const source = "CREATE TABLE `COMMENT` (`a``b` varchar(90) DEFAULT 'a,b ENGINE=foo', /* keep , ) */ `b` int GENERATED ALWAYS AS (IF(1,2,3)) STORED) COMMENT='keep  two spaces'";
+    const result = formatDefinition(source).sql;
+    for (const literal of ["'a,b ENGINE=foo'", '`a``b`', '/* keep , ) */', 'IF(1,2,3)', "'keep  two spaces'"]) expect(result).toContain(literal);
+    expect(compactDefinition(result).replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')).toBe(compactDefinition(source));
+  });
+});
